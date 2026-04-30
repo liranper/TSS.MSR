@@ -166,7 +166,17 @@ class TPM_ALG_ID(TpmEnum): # UINT16
     rotated such as in video codecs
     """
 
-    LAST = 0x0044
+    MLDSA = 0x0048
+    """ ML-DSA (CRYSTALS-Dilithium) post-quantum signature algorithm
+    (TPM 2.0 Library Spec v1.85)
+    """
+
+    MLKEM = 0x0049
+    """ ML-KEM (CRYSTALS-Kyber) post-quantum key encapsulation mechanism
+    (TPM 2.0 Library Spec v1.85)
+    """
+
+    LAST = 0x0049
 
     ANY = 0x7FFF
     """ Phony alg ID to be used for the first union member with no selector """
@@ -282,6 +292,32 @@ class SHA3_512(TpmEnum): # UINT32
     BLOCK_SIZE = 72
     """ Size of hash block in octets """
 # enum SHA3_512
+
+class TPM_MLDSA_SECURITY_STRENGTH(TpmEnum): # UINT16
+    """ Table - Defines for ML-DSA parameter sets (TPM 2.0 Library Spec v1.85) """
+
+    MLDSA_44 = 0x0000
+    """ ML-DSA-44 (NIST security category 2) """
+
+    MLDSA_65 = 0x0001
+    """ ML-DSA-65 (NIST security category 3) """
+
+    MLDSA_87 = 0x0002
+    """ ML-DSA-87 (NIST security category 5) """
+# enum TPM_MLDSA_SECURITY_STRENGTH
+
+class TPM_MLKEM_SECURITY_STRENGTH(TpmEnum): # UINT16
+    """ Table - Defines for ML-KEM parameter sets (TPM 2.0 Library Spec v1.85) """
+
+    MLKEM_512 = 0x0000
+    """ ML-KEM-512 (NIST security category 1) """
+
+    MLKEM_768 = 0x0001
+    """ ML-KEM-768 (NIST security category 3) """
+
+    MLKEM_1024 = 0x0002
+    """ ML-KEM-1024 (NIST security category 5) """
+# enum TPM_MLKEM_SECURITY_STRENGTH
 
 class Logic(TpmEnum): # BYTE
     """ Table 4 Defines for Logic Values """
@@ -607,7 +643,25 @@ class TPM_CC(TpmEnum): # UINT32
 
     ECC_Decrypt = 0x0000019A
 
-    LAST = 0x0000019A
+    SignSequenceStart = 0x0000019B
+    """ Start an ML-DSA signing sequence (TPM 2.0 Library Spec v1.85) """
+
+    SignSequenceComplete = 0x0000019C
+    """ Complete an ML-DSA signing sequence (TPM 2.0 Library Spec v1.85) """
+
+    VerifySequenceStart = 0x0000019D
+    """ Start an ML-DSA verify sequence (TPM 2.0 Library Spec v1.85) """
+
+    VerifySequenceComplete = 0x0000019E
+    """ Complete an ML-DSA verify sequence (TPM 2.0 Library Spec v1.85) """
+
+    Encapsulate = 0x0000019F
+    """ Perform ML-KEM encapsulation (TPM 2.0 Library Spec v1.85) """
+
+    Decapsulate = 0x000001A0
+    """ Perform ML-KEM decapsulation (TPM 2.0 Library Spec v1.85) """
+
+    LAST = 0x000001A0
     """ Compile variable. May increase based on implementation. """
 
     CC_VEND = 0x20000000
@@ -3401,6 +3455,7 @@ class UnionFactory:
             if selector == TPM_ALG_ID.SM2: return TPMS_SIGNATURE_SM2()
             if selector == TPM_ALG_ID.ECSCHNORR: return TPMS_SIGNATURE_ECSCHNORR()
             if selector == TPM_ALG_ID.HMAC: return TPMT_HA()
+            if selector == TPM_ALG_ID.MLDSA: return TPMS_SIGNATURE_MLDSA()
             if selector == TPM_ALG_ID.ANY: return TPMS_SCHEME_HASH()
             if selector == TPM_ALG_ID.NULL: return TPMS_NULL_SIGNATURE()
         elif unionType == 'TPMU_PUBLIC_ID':
@@ -3408,12 +3463,16 @@ class UnionFactory:
             if selector == TPM_ALG_ID.SYMCIPHER: return TPM2B_DIGEST_SYMCIPHER()
             if selector == TPM_ALG_ID.RSA: return TPM2B_PUBLIC_KEY_RSA()
             if selector == TPM_ALG_ID.ECC: return TPMS_ECC_POINT()
+            if selector == TPM_ALG_ID.MLDSA: return TPM2B_MLDSA_PUBLIC_KEY()
+            if selector == TPM_ALG_ID.MLKEM: return TPM2B_MLKEM_PUBLIC_KEY()
             if selector == TPM_ALG_ID.ANY: return TPMS_DERIVE()
         elif unionType == 'TPMU_PUBLIC_PARMS':
             if selector == TPM_ALG_ID.KEYEDHASH: return TPMS_KEYEDHASH_PARMS()
             if selector == TPM_ALG_ID.SYMCIPHER: return TPMS_SYMCIPHER_PARMS()
             if selector == TPM_ALG_ID.RSA: return TPMS_RSA_PARMS()
             if selector == TPM_ALG_ID.ECC: return TPMS_ECC_PARMS()
+            if selector == TPM_ALG_ID.MLDSA: return TPMS_MLDSA_PARMS()
+            if selector == TPM_ALG_ID.MLKEM: return TPMS_MLKEM_PARMS()
             if selector == TPM_ALG_ID.ANY: return TPMS_ASYM_PARMS()
         elif unionType == 'TPMU_SENSITIVE_COMPOSITE':
             if selector == TPM_ALG_ID.RSA: return TPM2B_PRIVATE_KEY_RSA()
@@ -18287,3 +18346,812 @@ class TPM2B_DIGEST_KEYEDHASH (TPM2B_DIGEST):
         return TpmBuffer(buffer).createObj(TPM2B_DIGEST_KEYEDHASH)
 # TPM2B_DIGEST_KEYEDHASH
 
+#
+# TPM 2.0 Library Spec v1.85 PQC additions: ML-DSA and ML-KEM
+#
+
+class TPMS_MLDSA_PARMS (TpmStructure, TPMU_PUBLIC_PARMS):
+    def __init__(self, security = 0):
+        """ Parameters for ML-DSA (CRYSTALS-Dilithium) keys
+        (TPM 2.0 Library Spec v1.85 Part 2)
+
+        Attributes:
+            security (TPM_MLDSA_SECURITY_STRENGTH): Parameter set selector:
+                MLDSA_44 (0), MLDSA_65 (1), or MLDSA_87 (2)
+        """
+        self.security = security
+
+    def GetUnionSelector(self): # TPM_ALG_ID
+        """ TpmUnion method """
+        return TPM_ALG_ID.MLDSA
+
+    def toTpm(self, buf):
+        """ TpmMarshaller method """
+        buf.writeShort(self.security)
+
+    def initFromTpm(self, buf):
+        """ TpmMarshaller method """
+        self.security = buf.readShort()
+
+    @staticmethod
+    def fromTpm(buf):
+        """ Returns new TPMS_MLDSA_PARMS object constructed from its marshaled
+        representation in the given TpmBuffer buffer
+        """
+        return buf.createObj(TPMS_MLDSA_PARMS)
+
+    @staticmethod
+    def fromBytes(buffer):
+        """ Returns new TPMS_MLDSA_PARMS object constructed from its marshaled
+        representation in the given byte buffer
+        """
+        return TpmBuffer(buffer).createObj(TPMS_MLDSA_PARMS)
+# TPMS_MLDSA_PARMS
+
+class TPMS_MLKEM_PARMS (TpmStructure, TPMU_PUBLIC_PARMS):
+    def __init__(self, security = 0):
+        """ Parameters for ML-KEM (CRYSTALS-Kyber) keys
+        (TPM 2.0 Library Spec v1.85 Part 2)
+
+        Attributes:
+            security (TPM_MLKEM_SECURITY_STRENGTH): Parameter set selector:
+                MLKEM_512 (0), MLKEM_768 (1), or MLKEM_1024 (2)
+        """
+        self.security = security
+
+    def GetUnionSelector(self): # TPM_ALG_ID
+        """ TpmUnion method """
+        return TPM_ALG_ID.MLKEM
+
+    def toTpm(self, buf):
+        """ TpmMarshaller method """
+        buf.writeShort(self.security)
+
+    def initFromTpm(self, buf):
+        """ TpmMarshaller method """
+        self.security = buf.readShort()
+
+    @staticmethod
+    def fromTpm(buf):
+        """ Returns new TPMS_MLKEM_PARMS object constructed from its marshaled
+        representation in the given TpmBuffer buffer
+        """
+        return buf.createObj(TPMS_MLKEM_PARMS)
+
+    @staticmethod
+    def fromBytes(buffer):
+        """ Returns new TPMS_MLKEM_PARMS object constructed from its marshaled
+        representation in the given byte buffer
+        """
+        return TpmBuffer(buffer).createObj(TPMS_MLKEM_PARMS)
+# TPMS_MLKEM_PARMS
+
+class TPM2B_MLDSA_PUBLIC_KEY (TpmStructure, TPMU_PUBLIC_ID):
+    def __init__(self, buffer = None):
+        """ Sized buffer holding the ML-DSA public key
+        (TPM 2.0 Library Spec v1.85 Part 2)
+
+        Attributes:
+            buffer (bytes): The ML-DSA public key value
+        """
+        self.buffer = buffer
+
+    def GetUnionSelector(self): # TPM_ALG_ID
+        """ TpmUnion method """
+        return TPM_ALG_ID.MLDSA
+
+    def toTpm(self, buf):
+        """ TpmMarshaller method """
+        buf.writeSizedByteBuf(self.buffer)
+
+    def initFromTpm(self, buf):
+        """ TpmMarshaller method """
+        self.buffer = buf.readSizedByteBuf()
+
+    @staticmethod
+    def fromTpm(buf):
+        """ Returns new TPM2B_MLDSA_PUBLIC_KEY object constructed from its
+        marshaled representation in the given TpmBuffer buffer
+        """
+        return buf.createObj(TPM2B_MLDSA_PUBLIC_KEY)
+
+    @staticmethod
+    def fromBytes(buffer):
+        """ Returns new TPM2B_MLDSA_PUBLIC_KEY object constructed from its
+        marshaled representation in the given byte buffer
+        """
+        return TpmBuffer(buffer).createObj(TPM2B_MLDSA_PUBLIC_KEY)
+# TPM2B_MLDSA_PUBLIC_KEY
+
+class TPM2B_MLKEM_PUBLIC_KEY (TpmStructure, TPMU_PUBLIC_ID):
+    def __init__(self, buffer = None):
+        """ Sized buffer holding the ML-KEM public key
+        (TPM 2.0 Library Spec v1.85 Part 2)
+
+        Attributes:
+            buffer (bytes): The ML-KEM public key value
+        """
+        self.buffer = buffer
+
+    def GetUnionSelector(self): # TPM_ALG_ID
+        """ TpmUnion method """
+        return TPM_ALG_ID.MLKEM
+
+    def toTpm(self, buf):
+        """ TpmMarshaller method """
+        buf.writeSizedByteBuf(self.buffer)
+
+    def initFromTpm(self, buf):
+        """ TpmMarshaller method """
+        self.buffer = buf.readSizedByteBuf()
+
+    @staticmethod
+    def fromTpm(buf):
+        """ Returns new TPM2B_MLKEM_PUBLIC_KEY object constructed from its
+        marshaled representation in the given TpmBuffer buffer
+        """
+        return buf.createObj(TPM2B_MLKEM_PUBLIC_KEY)
+
+    @staticmethod
+    def fromBytes(buffer):
+        """ Returns new TPM2B_MLKEM_PUBLIC_KEY object constructed from its
+        marshaled representation in the given byte buffer
+        """
+        return TpmBuffer(buffer).createObj(TPM2B_MLKEM_PUBLIC_KEY)
+# TPM2B_MLKEM_PUBLIC_KEY
+
+class TPMS_SIGNATURE_MLDSA (TpmStructure, TPMU_SIGNATURE):
+    def __init__(self, sig = None):
+        """ ML-DSA signature structure
+        (TPM 2.0 Library Spec v1.85 Part 2)
+
+        Attributes:
+            sig (bytes): The ML-DSA signature bytes
+        """
+        self.sig = sig
+
+    def GetUnionSelector(self): # TPM_ALG_ID
+        """ TpmUnion method """
+        return TPM_ALG_ID.MLDSA
+
+    def toTpm(self, buf):
+        """ TpmMarshaller method """
+        buf.writeSizedByteBuf(self.sig)
+
+    def initFromTpm(self, buf):
+        """ TpmMarshaller method """
+        self.sig = buf.readSizedByteBuf()
+
+    @staticmethod
+    def fromTpm(buf):
+        """ Returns new TPMS_SIGNATURE_MLDSA object constructed from its
+        marshaled representation in the given TpmBuffer buffer
+        """
+        return buf.createObj(TPMS_SIGNATURE_MLDSA)
+
+    @staticmethod
+    def fromBytes(buffer):
+        """ Returns new TPMS_SIGNATURE_MLDSA object constructed from its
+        marshaled representation in the given byte buffer
+        """
+        return TpmBuffer(buffer).createObj(TPMS_SIGNATURE_MLDSA)
+# TPMS_SIGNATURE_MLDSA
+
+class TPM2B_KEM_CIPHERTEXT (TpmStructure):
+    def __init__(self, buffer = None):
+        """ Sized buffer holding ML-KEM ciphertext
+        (TPM 2.0 Library Spec v1.85 Part 2)
+
+        Attributes:
+            buffer (bytes): The KEM ciphertext bytes
+        """
+        self.buffer = buffer
+
+    def toTpm(self, buf):
+        """ TpmMarshaller method """
+        buf.writeSizedByteBuf(self.buffer)
+
+    def initFromTpm(self, buf):
+        """ TpmMarshaller method """
+        self.buffer = buf.readSizedByteBuf()
+
+    @staticmethod
+    def fromTpm(buf):
+        """ Returns new TPM2B_KEM_CIPHERTEXT object constructed from its
+        marshaled representation in the given TpmBuffer buffer
+        """
+        return buf.createObj(TPM2B_KEM_CIPHERTEXT)
+
+    @staticmethod
+    def fromBytes(buffer):
+        """ Returns new TPM2B_KEM_CIPHERTEXT object constructed from its
+        marshaled representation in the given byte buffer
+        """
+        return TpmBuffer(buffer).createObj(TPM2B_KEM_CIPHERTEXT)
+# TPM2B_KEM_CIPHERTEXT
+
+class TPM2B_KEM_SECRET (TpmStructure):
+    def __init__(self, buffer = None):
+        """ Sized buffer holding an ML-KEM shared secret
+        (TPM 2.0 Library Spec v1.85 Part 2)
+
+        Attributes:
+            buffer (bytes): The shared secret bytes
+        """
+        self.buffer = buffer
+
+    def toTpm(self, buf):
+        """ TpmMarshaller method """
+        buf.writeSizedByteBuf(self.buffer)
+
+    def initFromTpm(self, buf):
+        """ TpmMarshaller method """
+        self.buffer = buf.readSizedByteBuf()
+
+    @staticmethod
+    def fromTpm(buf):
+        """ Returns new TPM2B_KEM_SECRET object constructed from its
+        marshaled representation in the given TpmBuffer buffer
+        """
+        return buf.createObj(TPM2B_KEM_SECRET)
+
+    @staticmethod
+    def fromBytes(buffer):
+        """ Returns new TPM2B_KEM_SECRET object constructed from its
+        marshaled representation in the given byte buffer
+        """
+        return TpmBuffer(buffer).createObj(TPM2B_KEM_SECRET)
+# TPM2B_KEM_SECRET
+
+#
+# TPM 2.0 Library Spec v1.85: New command request/response structures
+#
+
+class TPM2_SignSequenceStart_REQUEST (ReqStructure):
+    def __init__(self, signingKey = TPM_HANDLE(), inScheme = None, hashAlg = TPM_ALG_ID.NULL):
+        """ Start an ML-DSA signing sequence
+        (TPM 2.0 Library Spec v1.85 Part 3)
+
+        Attributes:
+            signingKey (TPM_HANDLE): Handle of the ML-DSA signing key
+                Auth Index: 1
+                Auth Role: USER
+            inScheme (TPMU_SIG_SCHEME): Signing scheme; shall be TPM_ALG_MLDSA
+                for ML-DSA keys, or TPM_ALG_NULL to use the key's default scheme.
+                One of: TPMS_SIG_SCHEME_RSASSA, TPMS_SIG_SCHEME_RSAPSS,
+                TPMS_SIG_SCHEME_ECDSA, TPMS_SIG_SCHEME_ECDAA,
+                TPMS_SIG_SCHEME_SM2, TPMS_SIG_SCHEME_ECSCHNORR,
+                TPMS_SCHEME_HMAC, TPMS_SCHEME_HASH, TPMS_NULL_SIG_SCHEME.
+            hashAlg (TPM_ALG_ID): Hash algorithm used to pre-hash the message
+                (TPM_ALG_NULL for pure ML-DSA)
+        """
+        self.signingKey = signingKey
+        self.inScheme = inScheme
+        self.hashAlg = hashAlg
+
+    @property
+    def inSchemeScheme(self): # TPM_ALG_ID
+        """ Scheme selector """
+        return self.inScheme.GetUnionSelector() if self.inScheme else TPM_ALG_ID.NULL
+
+    def toTpm(self, buf):
+        """ TpmMarshaller method """
+        if self.inScheme is None:
+            buf.writeShort(TPM_ALG_ID.NULL)
+        else:
+            buf.writeShort(self.inScheme.GetUnionSelector())
+            self.inScheme.toTpm(buf)
+        buf.writeShort(self.hashAlg)
+
+    def initFromTpm(self, buf):
+        """ TpmMarshaller method """
+        inSchemeScheme = buf.readShort()
+        if inSchemeScheme != TPM_ALG_ID.NULL:
+            self.inScheme = UnionFactory.create('TPMU_SIG_SCHEME', inSchemeScheme)
+            self.inScheme.initFromTpm(buf)
+        else:
+            self.inScheme = None
+        self.hashAlg = buf.readShort()
+
+    @staticmethod
+    def fromTpm(buf):
+        """ Returns new TPM2_SignSequenceStart_REQUEST object constructed from
+        its marshaled representation in the given TpmBuffer buffer
+        """
+        return buf.createObj(TPM2_SignSequenceStart_REQUEST)
+
+    @staticmethod
+    def fromBytes(buffer):
+        """ Returns new TPM2_SignSequenceStart_REQUEST object constructed from
+        its marshaled representation in the given byte buffer
+        """
+        return TpmBuffer(buffer).createObj(TPM2_SignSequenceStart_REQUEST)
+
+    def numHandles(self): return 1
+
+    def numAuthHandles(self): return 1
+
+    def getHandles(self): return [self.signingKey]
+# TPM2_SignSequenceStart_REQUEST
+
+class SignSequenceStartResponse (RespStructure):
+    def __init__(self, sequenceHandle = TPM_HANDLE()):
+        """ Response from TPM2_SignSequenceStart
+        (TPM 2.0 Library Spec v1.85 Part 3)
+
+        Attributes:
+            sequenceHandle (TPM_HANDLE): Handle to the signing sequence object
+        """
+        self.sequenceHandle = sequenceHandle
+
+    @staticmethod
+    def fromTpm(buf):
+        """ Returns new SignSequenceStartResponse object constructed from its
+        marshaled representation in the given TpmBuffer buffer
+        """
+        return buf.createObj(SignSequenceStartResponse)
+
+    @staticmethod
+    def fromBytes(buffer):
+        """ Returns new SignSequenceStartResponse object constructed from its
+        marshaled representation in the given byte buffer
+        """
+        return TpmBuffer(buffer).createObj(SignSequenceStartResponse)
+
+    def numHandles(self): return 1
+
+    def getHandle(self): return self.sequenceHandle
+
+    def setHandle(self, h): self.sequenceHandle = h
+# SignSequenceStartResponse
+
+class TPM2_SignSequenceComplete_REQUEST (ReqStructure):
+    def __init__(self, sequenceHandle = TPM_HANDLE(), buffer = None, hierarchy = TPM_HANDLE()):
+        """ Complete an ML-DSA signing sequence
+        (TPM 2.0 Library Spec v1.85 Part 3)
+
+        Attributes:
+            sequenceHandle (TPM_HANDLE): Handle to the signing sequence
+                Auth Index: 1
+                Auth Role: USER
+            buffer (bytes): Last chunk of data to add to the sequence (may be empty)
+            hierarchy (TPM_HANDLE): Hierarchy used for the validation ticket
+        """
+        self.sequenceHandle = sequenceHandle
+        self.buffer = buffer
+        self.hierarchy = hierarchy
+
+    def toTpm(self, buf):
+        """ TpmMarshaller method """
+        buf.writeSizedByteBuf(self.buffer)
+        self.hierarchy.toTpm(buf)
+
+    def initFromTpm(self, buf):
+        """ TpmMarshaller method """
+        self.buffer = buf.readSizedByteBuf()
+        self.hierarchy = TPM_HANDLE.fromTpm(buf)
+
+    @staticmethod
+    def fromTpm(buf):
+        """ Returns new TPM2_SignSequenceComplete_REQUEST object constructed from
+        its marshaled representation in the given TpmBuffer buffer
+        """
+        return buf.createObj(TPM2_SignSequenceComplete_REQUEST)
+
+    @staticmethod
+    def fromBytes(buffer):
+        """ Returns new TPM2_SignSequenceComplete_REQUEST object constructed from
+        its marshaled representation in the given byte buffer
+        """
+        return TpmBuffer(buffer).createObj(TPM2_SignSequenceComplete_REQUEST)
+
+    def numHandles(self): return 1
+
+    def numAuthHandles(self): return 1
+
+    def getHandles(self): return [self.sequenceHandle]
+# TPM2_SignSequenceComplete_REQUEST
+
+class SignSequenceCompleteResponse (RespStructure):
+    def __init__(self, signature = None):
+        """ Response from TPM2_SignSequenceComplete
+        (TPM 2.0 Library Spec v1.85 Part 3)
+
+        Attributes:
+            signature (TPMU_SIGNATURE): The ML-DSA signature
+                One of: TPMS_SIGNATURE_RSASSA, TPMS_SIGNATURE_RSAPSS,
+                TPMS_SIGNATURE_ECDSA, TPMS_SIGNATURE_ECDAA, TPMS_SIGNATURE_SM2,
+                TPMS_SIGNATURE_ECSCHNORR, TPMT_HA, TPMS_SIGNATURE_MLDSA,
+                TPMS_SCHEME_HASH, TPMS_NULL_SIGNATURE.
+        """
+        self.signature = signature
+
+    @property
+    def signatureSigAlg(self): # TPM_ALG_ID
+        """ Selector of the algorithm used to construct the signature """
+        return self.signature.GetUnionSelector() if self.signature else TPM_ALG_ID.NULL
+
+    def toTpm(self, buf):
+        """ TpmMarshaller method """
+        if self.signature is None: return
+        buf.writeShort(self.signature.GetUnionSelector())
+        self.signature.toTpm(buf)
+
+    def initFromTpm(self, buf):
+        """ TpmMarshaller method """
+        signatureSigAlg = buf.readShort()
+        self.signature = UnionFactory.create('TPMU_SIGNATURE', signatureSigAlg)
+        self.signature.initFromTpm(buf)
+
+    @staticmethod
+    def fromTpm(buf):
+        """ Returns new SignSequenceCompleteResponse object constructed from its
+        marshaled representation in the given TpmBuffer buffer
+        """
+        return buf.createObj(SignSequenceCompleteResponse)
+
+    @staticmethod
+    def fromBytes(buffer):
+        """ Returns new SignSequenceCompleteResponse object constructed from its
+        marshaled representation in the given byte buffer
+        """
+        return TpmBuffer(buffer).createObj(SignSequenceCompleteResponse)
+# SignSequenceCompleteResponse
+
+class TPM2_VerifySequenceStart_REQUEST (ReqStructure):
+    def __init__(self, keyHandle = TPM_HANDLE(), inScheme = None, hashAlg = TPM_ALG_ID.NULL):
+        """ Start an ML-DSA verification sequence
+        (TPM 2.0 Library Spec v1.85 Part 3)
+
+        Attributes:
+            keyHandle (TPM_HANDLE): Handle of the ML-DSA verification key
+                Auth Index: None
+            inScheme (TPMU_SIG_SCHEME): Signing scheme used by the signature;
+                shall be TPM_ALG_MLDSA for ML-DSA keys, or TPM_ALG_NULL.
+                One of: TPMS_SIG_SCHEME_RSASSA, TPMS_SIG_SCHEME_RSAPSS,
+                TPMS_SIG_SCHEME_ECDSA, TPMS_SIG_SCHEME_ECDAA,
+                TPMS_SIG_SCHEME_SM2, TPMS_SIG_SCHEME_ECSCHNORR,
+                TPMS_SCHEME_HMAC, TPMS_SCHEME_HASH, TPMS_NULL_SIG_SCHEME.
+            hashAlg (TPM_ALG_ID): Hash algorithm used for pre-hashing the message
+                (TPM_ALG_NULL for pure ML-DSA)
+        """
+        self.keyHandle = keyHandle
+        self.inScheme = inScheme
+        self.hashAlg = hashAlg
+
+    @property
+    def inSchemeScheme(self): # TPM_ALG_ID
+        """ Scheme selector """
+        return self.inScheme.GetUnionSelector() if self.inScheme else TPM_ALG_ID.NULL
+
+    def toTpm(self, buf):
+        """ TpmMarshaller method """
+        if self.inScheme is None:
+            buf.writeShort(TPM_ALG_ID.NULL)
+        else:
+            buf.writeShort(self.inScheme.GetUnionSelector())
+            self.inScheme.toTpm(buf)
+        buf.writeShort(self.hashAlg)
+
+    def initFromTpm(self, buf):
+        """ TpmMarshaller method """
+        inSchemeScheme = buf.readShort()
+        if inSchemeScheme != TPM_ALG_ID.NULL:
+            self.inScheme = UnionFactory.create('TPMU_SIG_SCHEME', inSchemeScheme)
+            self.inScheme.initFromTpm(buf)
+        else:
+            self.inScheme = None
+        self.hashAlg = buf.readShort()
+
+    @staticmethod
+    def fromTpm(buf):
+        """ Returns new TPM2_VerifySequenceStart_REQUEST object constructed from
+        its marshaled representation in the given TpmBuffer buffer
+        """
+        return buf.createObj(TPM2_VerifySequenceStart_REQUEST)
+
+    @staticmethod
+    def fromBytes(buffer):
+        """ Returns new TPM2_VerifySequenceStart_REQUEST object constructed from
+        its marshaled representation in the given byte buffer
+        """
+        return TpmBuffer(buffer).createObj(TPM2_VerifySequenceStart_REQUEST)
+
+    def numHandles(self): return 1
+
+    def numAuthHandles(self): return 0
+
+    def getHandles(self): return [self.keyHandle]
+# TPM2_VerifySequenceStart_REQUEST
+
+class VerifySequenceStartResponse (RespStructure):
+    def __init__(self, sequenceHandle = TPM_HANDLE()):
+        """ Response from TPM2_VerifySequenceStart
+        (TPM 2.0 Library Spec v1.85 Part 3)
+
+        Attributes:
+            sequenceHandle (TPM_HANDLE): Handle to the verification sequence object
+        """
+        self.sequenceHandle = sequenceHandle
+
+    @staticmethod
+    def fromTpm(buf):
+        """ Returns new VerifySequenceStartResponse object constructed from its
+        marshaled representation in the given TpmBuffer buffer
+        """
+        return buf.createObj(VerifySequenceStartResponse)
+
+    @staticmethod
+    def fromBytes(buffer):
+        """ Returns new VerifySequenceStartResponse object constructed from its
+        marshaled representation in the given byte buffer
+        """
+        return TpmBuffer(buffer).createObj(VerifySequenceStartResponse)
+
+    def numHandles(self): return 1
+
+    def getHandle(self): return self.sequenceHandle
+
+    def setHandle(self, h): self.sequenceHandle = h
+# VerifySequenceStartResponse
+
+class TPM2_VerifySequenceComplete_REQUEST (ReqStructure):
+    def __init__(self, sequenceHandle = TPM_HANDLE(), buffer = None, signature = None):
+        """ Complete an ML-DSA verification sequence
+        (TPM 2.0 Library Spec v1.85 Part 3)
+
+        Attributes:
+            sequenceHandle (TPM_HANDLE): Handle to the verification sequence
+                Auth Index: None
+            buffer (bytes): Last chunk of data to add to the sequence (may be empty)
+            signature (TPMU_SIGNATURE): The ML-DSA signature to verify
+                One of: TPMS_SIGNATURE_RSASSA, TPMS_SIGNATURE_RSAPSS,
+                TPMS_SIGNATURE_ECDSA, TPMS_SIGNATURE_ECDAA, TPMS_SIGNATURE_SM2,
+                TPMS_SIGNATURE_ECSCHNORR, TPMT_HA, TPMS_SIGNATURE_MLDSA,
+                TPMS_SCHEME_HASH, TPMS_NULL_SIGNATURE.
+        """
+        self.sequenceHandle = sequenceHandle
+        self.buffer = buffer
+        self.signature = signature
+
+    @property
+    def signatureSigAlg(self): # TPM_ALG_ID
+        """ Selector of the algorithm used to construct the signature """
+        return self.signature.GetUnionSelector() if self.signature else TPM_ALG_ID.NULL
+
+    def toTpm(self, buf):
+        """ TpmMarshaller method """
+        buf.writeSizedByteBuf(self.buffer)
+        if self.signature is None:
+            buf.writeShort(TPM_ALG_ID.NULL)
+        else:
+            buf.writeShort(self.signature.GetUnionSelector())
+            self.signature.toTpm(buf)
+
+    def initFromTpm(self, buf):
+        """ TpmMarshaller method """
+        self.buffer = buf.readSizedByteBuf()
+        signatureSigAlg = buf.readShort()
+        self.signature = UnionFactory.create('TPMU_SIGNATURE', signatureSigAlg)
+        self.signature.initFromTpm(buf)
+
+    @staticmethod
+    def fromTpm(buf):
+        """ Returns new TPM2_VerifySequenceComplete_REQUEST object constructed from
+        its marshaled representation in the given TpmBuffer buffer
+        """
+        return buf.createObj(TPM2_VerifySequenceComplete_REQUEST)
+
+    @staticmethod
+    def fromBytes(buffer):
+        """ Returns new TPM2_VerifySequenceComplete_REQUEST object constructed from
+        its marshaled representation in the given byte buffer
+        """
+        return TpmBuffer(buffer).createObj(TPM2_VerifySequenceComplete_REQUEST)
+
+    def numHandles(self): return 1
+
+    def numAuthHandles(self): return 0
+
+    def getHandles(self): return [self.sequenceHandle]
+# TPM2_VerifySequenceComplete_REQUEST
+
+class VerifySequenceCompleteResponse (RespStructure):
+    def __init__(self, validation = None):
+        """ Response from TPM2_VerifySequenceComplete
+        (TPM 2.0 Library Spec v1.85 Part 3)
+
+        Attributes:
+            validation (TPMT_TK_VERIFIED): Ticket indicating that the signature
+                verification succeeded
+        """
+        self.validation = validation
+
+    def toTpm(self, buf):
+        """ TpmMarshaller method """
+        if self.validation is not None:
+            self.validation.toTpm(buf)
+
+    def initFromTpm(self, buf):
+        """ TpmMarshaller method """
+        self.validation = TPMT_TK_VERIFIED.fromTpm(buf)
+
+    @staticmethod
+    def fromTpm(buf):
+        """ Returns new VerifySequenceCompleteResponse object constructed from its
+        marshaled representation in the given TpmBuffer buffer
+        """
+        return buf.createObj(VerifySequenceCompleteResponse)
+
+    @staticmethod
+    def fromBytes(buffer):
+        """ Returns new VerifySequenceCompleteResponse object constructed from its
+        marshaled representation in the given byte buffer
+        """
+        return TpmBuffer(buffer).createObj(VerifySequenceCompleteResponse)
+# VerifySequenceCompleteResponse
+
+class TPM2_Encapsulate_REQUEST (ReqStructure):
+    def __init__(self, keyHandle = TPM_HANDLE(), inScheme = TPM_ALG_ID.NULL):
+        """ Perform ML-KEM encapsulation to generate ciphertext and shared secret
+        (TPM 2.0 Library Spec v1.85 Part 3)
+
+        Attributes:
+            keyHandle (TPM_HANDLE): Handle of the ML-KEM public key to use
+                Auth Index: None
+            inScheme (TPM_ALG_ID): The KEM algorithm (TPM_ALG_MLKEM or TPM_ALG_NULL)
+        """
+        self.keyHandle = keyHandle
+        self.inScheme = inScheme
+
+    def toTpm(self, buf):
+        """ TpmMarshaller method """
+        buf.writeShort(self.inScheme)
+
+    def initFromTpm(self, buf):
+        """ TpmMarshaller method """
+        self.inScheme = buf.readShort()
+
+    @staticmethod
+    def fromTpm(buf):
+        """ Returns new TPM2_Encapsulate_REQUEST object constructed from its
+        marshaled representation in the given TpmBuffer buffer
+        """
+        return buf.createObj(TPM2_Encapsulate_REQUEST)
+
+    @staticmethod
+    def fromBytes(buffer):
+        """ Returns new TPM2_Encapsulate_REQUEST object constructed from its
+        marshaled representation in the given byte buffer
+        """
+        return TpmBuffer(buffer).createObj(TPM2_Encapsulate_REQUEST)
+
+    def numHandles(self): return 1
+
+    def numAuthHandles(self): return 0
+
+    def getHandles(self): return [self.keyHandle]
+# TPM2_Encapsulate_REQUEST
+
+class EncapsulateResponse (RespStructure):
+    def __init__(self, ciphertext = None, secret = None):
+        """ Response from TPM2_Encapsulate
+        (TPM 2.0 Library Spec v1.85 Part 3)
+
+        Attributes:
+            ciphertext (TPM2B_KEM_CIPHERTEXT): The KEM ciphertext to send to the decapsulator
+            secret (TPM2B_KEM_SECRET): The shared secret
+        """
+        self.ciphertext = ciphertext
+        self.secret = secret
+
+    def toTpm(self, buf):
+        """ TpmMarshaller method """
+        if self.ciphertext is not None:
+            self.ciphertext.toTpm(buf)
+        if self.secret is not None:
+            self.secret.toTpm(buf)
+
+    def initFromTpm(self, buf):
+        """ TpmMarshaller method """
+        self.ciphertext = TPM2B_KEM_CIPHERTEXT.fromTpm(buf)
+        self.secret = TPM2B_KEM_SECRET.fromTpm(buf)
+
+    @staticmethod
+    def fromTpm(buf):
+        """ Returns new EncapsulateResponse object constructed from its
+        marshaled representation in the given TpmBuffer buffer
+        """
+        return buf.createObj(EncapsulateResponse)
+
+    @staticmethod
+    def fromBytes(buffer):
+        """ Returns new EncapsulateResponse object constructed from its
+        marshaled representation in the given byte buffer
+        """
+        return TpmBuffer(buffer).createObj(EncapsulateResponse)
+# EncapsulateResponse
+
+class TPM2_Decapsulate_REQUEST (ReqStructure):
+    def __init__(self, keyHandle = TPM_HANDLE(), inScheme = TPM_ALG_ID.NULL, ciphertext = None):
+        """ Perform ML-KEM decapsulation to recover the shared secret from ciphertext
+        (TPM 2.0 Library Spec v1.85 Part 3)
+
+        Attributes:
+            keyHandle (TPM_HANDLE): Handle of the ML-KEM private key
+                Auth Index: 1
+                Auth Role: USER
+            inScheme (TPM_ALG_ID): The KEM algorithm (TPM_ALG_MLKEM or TPM_ALG_NULL)
+            ciphertext (TPM2B_KEM_CIPHERTEXT): The KEM ciphertext received from the encapsulator
+        """
+        self.keyHandle = keyHandle
+        self.inScheme = inScheme
+        self.ciphertext = ciphertext
+
+    def toTpm(self, buf):
+        """ TpmMarshaller method """
+        buf.writeShort(self.inScheme)
+        if self.ciphertext is not None:
+            self.ciphertext.toTpm(buf)
+        else:
+            buf.writeSizedByteBuf(None)
+
+    def initFromTpm(self, buf):
+        """ TpmMarshaller method """
+        self.inScheme = buf.readShort()
+        self.ciphertext = TPM2B_KEM_CIPHERTEXT.fromTpm(buf)
+
+    @staticmethod
+    def fromTpm(buf):
+        """ Returns new TPM2_Decapsulate_REQUEST object constructed from its
+        marshaled representation in the given TpmBuffer buffer
+        """
+        return buf.createObj(TPM2_Decapsulate_REQUEST)
+
+    @staticmethod
+    def fromBytes(buffer):
+        """ Returns new TPM2_Decapsulate_REQUEST object constructed from its
+        marshaled representation in the given byte buffer
+        """
+        return TpmBuffer(buffer).createObj(TPM2_Decapsulate_REQUEST)
+
+    def numHandles(self): return 1
+
+    def numAuthHandles(self): return 1
+
+    def getHandles(self): return [self.keyHandle]
+# TPM2_Decapsulate_REQUEST
+
+class DecapsulateResponse (RespStructure):
+    def __init__(self, secret = None):
+        """ Response from TPM2_Decapsulate
+        (TPM 2.0 Library Spec v1.85 Part 3)
+
+        Attributes:
+            secret (TPM2B_KEM_SECRET): The recovered shared secret
+        """
+        self.secret = secret
+
+    def toTpm(self, buf):
+        """ TpmMarshaller method """
+        if self.secret is not None:
+            self.secret.toTpm(buf)
+
+    def initFromTpm(self, buf):
+        """ TpmMarshaller method """
+        self.secret = TPM2B_KEM_SECRET.fromTpm(buf)
+
+    @staticmethod
+    def fromTpm(buf):
+        """ Returns new DecapsulateResponse object constructed from its
+        marshaled representation in the given TpmBuffer buffer
+        """
+        return buf.createObj(DecapsulateResponse)
+
+    @staticmethod
+    def fromBytes(buffer):
+        """ Returns new DecapsulateResponse object constructed from its
+        marshaled representation in the given byte buffer
+        """
+        return TpmBuffer(buffer).createObj(DecapsulateResponse)
+# DecapsulateResponse
