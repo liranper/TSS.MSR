@@ -42,7 +42,8 @@ def build_mldsa_template(security_strength=TPM_MLDSA_SECURITY_STRENGTH.MLDSA_65)
     Returns:
         TPMT_PUBLIC template
     """
-    parms = TPMS_MLDSA_PARMS(security_strength)
+    # allowExternalMu=0 (NO): disallow TPM2_SignDigest/VerifyDigestSignature
+    parms = TPMS_MLDSA_PARMS(security_strength, 0)
     unique = TPM2B_MLDSA_PUBLIC_KEY()
     return TPMT_PUBLIC(
         nameAlg=TPM_ALG_ID.SHA256,
@@ -69,7 +70,8 @@ def build_mlkem_template(security_strength=TPM_MLKEM_SECURITY_STRENGTH.MLKEM_768
     Returns:
         TPMT_PUBLIC template
     """
-    parms = TPMS_MLKEM_PARMS(security_strength)
+    # symmetric=None means TPM_ALG_NULL (unrestricted decryption key)
+    parms = TPMS_MLKEM_PARMS(symmetric=None, parameterSet=security_strength)
     unique = TPM2B_MLKEM_PUBLIC_KEY()
     return TPMT_PUBLIC(
         nameAlg=TPM_ALG_ID.SHA256,
@@ -118,12 +120,15 @@ def demo_mldsa(tpm):
         message = b'Hello, ML-DSA world! This message is signed by the TPM.'
         CHUNK_SIZE = 1024
 
+        # Start signing sequence
+        # auth=None: no authorization value for the sequence object
+        # context=None: empty TPM2B_SIGNATURE_CTX (correct for pure ML-DSA)
         print('Starting ML-DSA signing sequence...')
         tpm.allowErrors()
         sign_seq = tpm.SignSequenceStart(
-            mldsa_handle,
-            None,                      # inScheme: use key default
-            TPM_ALG_ID.NULL            # hashAlg: pure ML-DSA (no pre-hash)
+            mldsa_handle,   # keyHandle: ML-DSA signing key (auth: USER)
+            None,           # auth: auth value for the returned sequence handle
+            None            # context: TPM2B_SIGNATURE_CTX (empty for pure ML-DSA)
         )
         if tpm.lastResponseCode != TPM_RC.SUCCESS:
             _handle_unsupported('SignSequenceStart', tpm.lastResponseCode)
@@ -140,13 +145,13 @@ def demo_mldsa(tpm):
                 return False
             offset += CHUNK_SIZE
 
-        # Complete signing
+        # Complete signing: provide sequenceHandle, keyHandle, and final buffer
         print('Completing ML-DSA signing sequence...')
         tpm.allowErrors()
         signature = tpm.SignSequenceComplete(
-            sign_seq,
-            b'',                           # no final chunk
-            TPM_HANDLE(TPM_RH.OWNER)       # hierarchy for ticket
+            sign_seq,       # sequenceHandle (auth: USER)
+            mldsa_handle,   # keyHandle (auth: USER)
+            b''             # buffer: final (empty) message chunk
         )
         sign_seq = None  # sequence handle is flushed automatically on complete
         if tpm.lastResponseCode != TPM_RC.SUCCESS:
@@ -155,12 +160,15 @@ def demo_mldsa(tpm):
         print(f'  Signature obtained ({type(signature).__name__})')
 
         # Verify signature using VerifySequenceStart + SequenceUpdate + VerifySequenceComplete
+        # hint=None: empty TPM2B_SIGNATURE_HINT (correct for ML-DSA)
+        # context=None: empty TPM2B_SIGNATURE_CTX (correct for pure ML-DSA)
         print('Starting ML-DSA verification sequence...')
         tpm.allowErrors()
         verify_seq = tpm.VerifySequenceStart(
-            mldsa_handle,
-            None,                      # inScheme: use key default
-            TPM_ALG_ID.NULL            # hashAlg: pure ML-DSA
+            mldsa_handle,   # keyHandle: ML-DSA verify key (no auth needed)
+            None,           # auth: auth value for the returned sequence handle
+            None,           # hint: TPM2B_SIGNATURE_HINT (empty for ML-DSA)
+            None            # context: TPM2B_SIGNATURE_CTX (empty for pure ML-DSA)
         )
         if tpm.lastResponseCode != TPM_RC.SUCCESS:
             _handle_unsupported('VerifySequenceStart', tpm.lastResponseCode)
@@ -177,13 +185,14 @@ def demo_mldsa(tpm):
                 return False
             offset += CHUNK_SIZE
 
-        # Complete verification
+        # Complete verification: provide sequenceHandle, keyHandle, and signature
+        # No buffer field — the accumulated message lives in the sequence object
         print('Completing ML-DSA verification sequence...')
         tpm.allowErrors()
         validation = tpm.VerifySequenceComplete(
-            verify_seq,
-            b'',        # no final chunk
-            signature   # the signature to verify
+            verify_seq,     # sequenceHandle (no auth)
+            mldsa_handle,   # keyHandle (no auth)
+            signature       # the ML-DSA signature to verify
         )
         verify_seq = None  # flushed on complete
         if tpm.lastResponseCode != TPM_RC.SUCCESS:
@@ -245,31 +254,34 @@ def demo_mlkem(tpm):
         mlkem_handle = res.handle
         print(f'  ML-KEM key created, handle: 0x{int(mlkem_handle.handle):08X}')
 
-        # Encapsulate
+        # Encapsulate: keyHandle only (public key operation, no auth, no scheme parameter)
         print('Running TPM2_Encapsulate...')
         tpm.allowErrors()
-        enc_res = tpm.Encapsulate(mlkem_handle, TPM_ALG_ID.NULL)
+        enc_res = tpm.Encapsulate(mlkem_handle)
         if tpm.lastResponseCode != TPM_RC.SUCCESS:
             _handle_unsupported('Encapsulate', tpm.lastResponseCode)
             return False
 
+        # Response order per Part 3: sharedSecret first, then ciphertext
+        enc_secret = enc_res.sharedSecret
         ciphertext = enc_res.ciphertext
-        enc_secret = enc_res.secret
-        print(f'  Ciphertext: {len(ciphertext.buffer)} bytes')
-        print(f'  Encapsulated shared secret: {len(enc_secret.buffer)} bytes')
+        print(f'  Ciphertext: {len(ciphertext.buffer) if ciphertext and ciphertext.buffer else 0} bytes')
+        print(f'  Encapsulated shared secret: {len(enc_secret.buffer) if enc_secret and enc_secret.buffer else 0} bytes')
 
-        # Decapsulate
+        # Decapsulate: keyHandle + ciphertext (no scheme parameter)
         print('Running TPM2_Decapsulate...')
         tpm.allowErrors()
-        dec_secret = tpm.Decapsulate(mlkem_handle, TPM_ALG_ID.NULL, ciphertext)
+        dec_secret = tpm.Decapsulate(mlkem_handle, ciphertext)
         if tpm.lastResponseCode != TPM_RC.SUCCESS:
             _handle_unsupported('Decapsulate', tpm.lastResponseCode)
             return False
 
-        print(f'  Decapsulated shared secret: {len(dec_secret.buffer)} bytes')
+        print(f'  Decapsulated shared secret: {len(dec_secret.buffer) if dec_secret and dec_secret.buffer else 0} bytes')
 
         # Compare
-        if enc_secret.buffer == dec_secret.buffer:
+        enc_buf = enc_secret.buffer if enc_secret else None
+        dec_buf = dec_secret.buffer if dec_secret else None
+        if enc_buf == dec_buf:
             print('  ML-KEM shared secrets MATCH — encapsulation/decapsulation SUCCEEDED!')
         else:
             print('  ERROR: ML-KEM shared secrets DO NOT MATCH!')
