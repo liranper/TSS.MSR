@@ -18805,8 +18805,7 @@ class TPM2_SignSequenceStart_REQUEST (ReqStructure):
 
         Attributes:
             keyHandle (TPM_HANDLE): Handle of the ML-DSA signing key
-                Auth Index: 1
-                Auth Role: USER
+                Auth Index: None
             auth (bytes): Authorization value for the returned sequence handle
             context (bytes): Optional opaque context blob (typically empty/None
                 for pure ML-DSA); passed as TPM2B_SIGNATURE_CTX
@@ -18841,9 +18840,11 @@ class TPM2_SignSequenceStart_REQUEST (ReqStructure):
 
     def numHandles(self): return 1
 
-    def numAuthHandles(self): return 1
+    def numAuthHandles(self): return 0
 
     def getHandles(self): return [self.keyHandle]
+    
+    def sessEncInfo(self): return SessEncInfo(2, 1)
 # TPM2_SignSequenceStart_REQUEST
 
 class SignSequenceStartResponse (RespStructure):
@@ -18922,6 +18923,8 @@ class TPM2_SignSequenceComplete_REQUEST (ReqStructure):
     def numAuthHandles(self): return 2
 
     def getHandles(self): return [self.sequenceHandle, self.keyHandle]
+    
+    def sessEncInfo(self): return SessEncInfo(2, 1)
 # TPM2_SignSequenceComplete_REQUEST
 
 class SignSequenceCompleteResponse (RespStructure):
@@ -19022,6 +19025,8 @@ class TPM2_VerifySequenceStart_REQUEST (ReqStructure):
     def numAuthHandles(self): return 0
 
     def getHandles(self): return [self.keyHandle]
+    
+    def sessEncInfo(self): return SessEncInfo(2, 1)
 # TPM2_VerifySequenceStart_REQUEST
 
 class VerifySequenceStartResponse (RespStructure):
@@ -19114,7 +19119,7 @@ class TPM2_VerifySequenceComplete_REQUEST (ReqStructure):
 
     def numHandles(self): return 2
 
-    def numAuthHandles(self): return 0
+    def numAuthHandles(self): return 1
 
     def getHandles(self): return [self.sequenceHandle, self.keyHandle]
 # TPM2_VerifySequenceComplete_REQUEST
@@ -19225,6 +19230,8 @@ class EncapsulateResponse (RespStructure):
         marshaled representation in the given byte buffer
         """
         return TpmBuffer(buffer).createObj(EncapsulateResponse)
+    
+    def sessEncInfo(self): return SessEncInfo(2, 1)
 # EncapsulateResponse
 
 class TPM2_Decapsulate_REQUEST (ReqStructure):
@@ -19272,6 +19279,8 @@ class TPM2_Decapsulate_REQUEST (ReqStructure):
     def numAuthHandles(self): return 1
 
     def getHandles(self): return [self.keyHandle]
+    
+    def sessEncInfo(self): return SessEncInfo(2, 1)
 # TPM2_Decapsulate_REQUEST
 
 class DecapsulateResponse (RespStructure):
@@ -19306,4 +19315,6 @@ class DecapsulateResponse (RespStructure):
         marshaled representation in the given byte buffer
         """
         return TpmBuffer(buffer).createObj(DecapsulateResponse)
+
+    def sessEncInfo(self): return SessEncInfo(2, 1)
 # DecapsulateResponse

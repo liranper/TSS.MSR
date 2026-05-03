@@ -48,7 +48,7 @@ def build_mldsa_template(security_strength=TPM_MLDSA_SECURITY_STRENGTH.MLDSA_65)
     return TPMT_PUBLIC(
         nameAlg=TPM_ALG_ID.SHA256,
         objectAttributes=(
-            TPMA_OBJECT.restricted |
+            # TPMA_OBJECT.restricted |
             TPMA_OBJECT.sign |
             TPMA_OBJECT.fixedTPM |
             TPMA_OBJECT.fixedParent |
@@ -97,9 +97,9 @@ def demo_mldsa(tpm):
 
     try:
         # Create ML-DSA primary key
-        print('Creating ML-DSA-65 primary key under TPM_RH_OWNER...')
+        print('Creating ML-DSA-87 primary key under TPM_RH_OWNER...')
         sensitive = TPMS_SENSITIVE_CREATE()
-        inPublic = build_mldsa_template(TPM_MLDSA_SECURITY_STRENGTH.MLDSA_65)
+        inPublic = build_mldsa_template(TPM_MLDSA_SECURITY_STRENGTH.MLDSA_87)
 
         tpm.allowErrors()
         res = tpm.CreatePrimary(
@@ -117,7 +117,7 @@ def demo_mldsa(tpm):
         print(f'  ML-DSA key created, handle: 0x{int(mldsa_handle.handle):08X}')
 
         # Sign a message using SignSequenceStart + SequenceUpdate + SignSequenceComplete
-        message = b'Hello, ML-DSA world! This message is signed by the TPM.'
+        message = b'Hello, ML-DSA world! This message is signed by the TPM.'*100
         CHUNK_SIZE = 1024
 
         # Start signing sequence
@@ -235,9 +235,9 @@ def demo_mlkem(tpm):
 
     try:
         # Create ML-KEM primary key
-        print('Creating ML-KEM-768 primary key under TPM_RH_OWNER...')
+        print('Creating ML-KEM-1024 primary key under TPM_RH_OWNER...')
         sensitive = TPMS_SENSITIVE_CREATE()
-        inPublic = build_mlkem_template(TPM_MLKEM_SECURITY_STRENGTH.MLKEM_768)
+        inPublic = build_mlkem_template(TPM_MLKEM_SECURITY_STRENGTH.MLKEM_1024)
 
         tpm.allowErrors()
         res = tpm.CreatePrimary(
@@ -337,6 +337,14 @@ def main():
     tpm.Startup(TPM_SU.CLEAR)
     if tpm.lastResponseCode not in (TPM_RC.SUCCESS, TPM_RC.INITIALIZE):
         print(f'WARNING: Startup returned unexpected code: {tpm.lastResponseCode}')
+
+    # attempt cleanup unflushed from previous runs (ignore errors)
+    for handle in [0x80000000, 0x80000001, 0x80000002]:  # common primary key handles
+        try:
+            tpm.allowErrors()
+            tpm.FlushContext(TPM_HANDLE(handle))
+        except Exception:
+            pass
 
     mldsa_ok = demo_mldsa(tpm)
     mlkem_ok = demo_mlkem(tpm)
