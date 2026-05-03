@@ -44,7 +44,7 @@ def build_mldsa_template(security_strength=TPM_MLDSA_SECURITY_STRENGTH.MLDSA_65)
     """
     # allowExternalMu=0 (NO): disallow TPM2_SignDigest/VerifyDigestSignature
     parms = TPMS_MLDSA_PARMS(security_strength, 0)
-    unique = TPM2B_MLDSA_PUBLIC_KEY()
+    unique = TPM2B_PUBLIC_KEY_MLDSA()
     return TPMT_PUBLIC(
         nameAlg=TPM_ALG_ID.SHA256,
         objectAttributes=(
@@ -72,7 +72,7 @@ def build_mlkem_template(security_strength=TPM_MLKEM_SECURITY_STRENGTH.MLKEM_768
     """
     # symmetric=None means TPM_ALG_NULL (unrestricted decryption key)
     parms = TPMS_MLKEM_PARMS(symmetric=None, parameterSet=security_strength)
-    unique = TPM2B_MLKEM_PUBLIC_KEY()
+    unique = TPM2B_PUBLIC_KEY_MLKEM()
     return TPMT_PUBLIC(
         nameAlg=TPM_ALG_ID.SHA256,
         objectAttributes=(

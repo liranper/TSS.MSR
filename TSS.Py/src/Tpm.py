@@ -2600,7 +2600,7 @@ class Tpm(TpmBase):
 
     def SignSequenceStart(self, keyHandle, auth, context=None):
         """ Start an ML-DSA signing sequence.
-        (TPM 2.0 Library Spec v1.85 Part 3 Table 89)
+        (TPM 2.0 Library Spec v1.85 Part 3)
 
         Args:
             keyHandle (TPM_HANDLE): Handle of the ML-DSA signing key
@@ -2621,7 +2621,7 @@ class Tpm(TpmBase):
 
     def SignSequenceComplete(self, sequenceHandle, keyHandle, buffer):
         """ Complete an ML-DSA signing sequence and return the signature.
-        (TPM 2.0 Library Spec v1.85 Part 3 Table 91)
+        (TPM 2.0 Library Spec v1.85 Part 3)
 
         Args:
             sequenceHandle (TPM_HANDLE): Handle to the signing sequence
@@ -2643,7 +2643,7 @@ class Tpm(TpmBase):
 
     def VerifySequenceStart(self, keyHandle, auth, hint=None, context=None):
         """ Start an ML-DSA verification sequence.
-        (TPM 2.0 Library Spec v1.85 Part 3 Table 87)
+        (TPM 2.0 Library Spec v1.85 Part 3)
 
         Args:
             keyHandle (TPM_HANDLE): Handle of the ML-DSA verification key
@@ -2666,7 +2666,7 @@ class Tpm(TpmBase):
 
     def VerifySequenceComplete(self, sequenceHandle, keyHandle, signature):
         """ Complete an ML-DSA verification sequence.
-        (TPM 2.0 Library Spec v1.85 Part 3 Table 118)
+        (TPM 2.0 Library Spec v1.85 Part 3)
 
         The accumulated message is maintained inside the sequence object on the
         TPM (fed via SequenceUpdate); there is no per-call buffer field.

@@ -653,18 +653,18 @@ class TPM_CC(TpmEnum): # UINT32
     ECC_Decrypt = 0x0000019A
 
     VerifySequenceComplete = 0x000001A3
-    """ Complete an ML-DSA verification sequence (TPM 2.0 Library Spec v1.85 Part 3 Table 118) """
+    """ Complete an ML-DSA verification sequence (TPM 2.0 Library Spec v1.85 Part 3) """
 
     SignSequenceComplete = 0x000001A4
-    """ Complete an ML-DSA signing sequence (TPM 2.0 Library Spec v1.85 Part 3 Table 91) """
+    """ Complete an ML-DSA signing sequence (TPM 2.0 Library Spec v1.85 Part 3) """
 
     VerifyDigestSignature = 0x000001A5
     """ Verify an ML-DSA signature over an externally-computed digest
-    (TPM 2.0 Library Spec v1.85 Part 3 Table 120) """
+    (TPM 2.0 Library Spec v1.85 Part 3) """
 
     SignDigest = 0x000001A6
     """ Sign an externally-computed digest with an ML-DSA key
-    (TPM 2.0 Library Spec v1.85 Part 3 Table 126) """
+    (TPM 2.0 Library Spec v1.85 Part 3) """
 
     Encapsulate = 0x000001A7
     """ Perform ML-KEM encapsulation (TPM 2.0 Library Spec v1.85 Part 3) """
@@ -673,10 +673,10 @@ class TPM_CC(TpmEnum): # UINT32
     """ Perform ML-KEM decapsulation (TPM 2.0 Library Spec v1.85 Part 3) """
 
     VerifySequenceStart = 0x000001A9
-    """ Start an ML-DSA verification sequence (TPM 2.0 Library Spec v1.85 Part 3 Table 87) """
+    """ Start an ML-DSA verification sequence (TPM 2.0 Library Spec v1.85 Part 3) """
 
     SignSequenceStart = 0x000001AA
-    """ Start an ML-DSA signing sequence (TPM 2.0 Library Spec v1.85 Part 3 Table 89) """
+    """ Start an ML-DSA signing sequence (TPM 2.0 Library Spec v1.85 Part 3) """
 
     LAST = 0x000001AA
     """ Compile variable. May increase based on implementation. """
@@ -3481,9 +3481,9 @@ class UnionFactory:
             if selector == TPM_ALG_ID.SYMCIPHER: return TPM2B_DIGEST_SYMCIPHER()
             if selector == TPM_ALG_ID.RSA: return TPM2B_PUBLIC_KEY_RSA()
             if selector == TPM_ALG_ID.ECC: return TPMS_ECC_POINT()
-            if selector == TPM_ALG_ID.MLDSA: return TPM2B_MLDSA_PUBLIC_KEY()
-            if selector == TPM_ALG_ID.HASH_MLDSA: return TPM2B_MLDSA_PUBLIC_KEY()
-            if selector == TPM_ALG_ID.MLKEM: return TPM2B_MLKEM_PUBLIC_KEY()
+            if selector == TPM_ALG_ID.MLDSA: return TPM2B_PUBLIC_KEY_MLDSA()
+            if selector == TPM_ALG_ID.HASH_MLDSA: return TPM2B_PUBLIC_KEY_MLDSA()
+            if selector == TPM_ALG_ID.MLKEM: return TPM2B_PUBLIC_KEY_MLKEM()
             if selector == TPM_ALG_ID.ANY: return TPMS_DERIVE()
         elif unionType == 'TPMU_PUBLIC_PARMS':
             if selector == TPM_ALG_ID.KEYEDHASH: return TPMS_KEYEDHASH_PARMS()
@@ -18571,7 +18571,7 @@ class TPMS_MLKEM_PARMS (TpmStructure, TPMU_PUBLIC_PARMS):
         return TpmBuffer(buffer).createObj(TPMS_MLKEM_PARMS)
 # TPMS_MLKEM_PARMS
 
-class TPM2B_MLDSA_PUBLIC_KEY (TpmStructure, TPMU_PUBLIC_ID):
+class TPM2B_PUBLIC_KEY_MLDSA (TpmStructure, TPMU_PUBLIC_ID):
     def __init__(self, buffer = None):
         """ Sized buffer holding an ML-DSA or HashML-DSA public key
         (TPM 2.0 Library Spec v1.85 Part 2 Table 209)
@@ -18595,20 +18595,20 @@ class TPM2B_MLDSA_PUBLIC_KEY (TpmStructure, TPMU_PUBLIC_ID):
 
     @staticmethod
     def fromTpm(buf):
-        """ Returns new TPM2B_MLDSA_PUBLIC_KEY object constructed from its
+        """ Returns new TPM2B_PUBLIC_KEY_MLDSA object constructed from its
         marshaled representation in the given TpmBuffer buffer
         """
-        return buf.createObj(TPM2B_MLDSA_PUBLIC_KEY)
+        return buf.createObj(TPM2B_PUBLIC_KEY_MLDSA)
 
     @staticmethod
     def fromBytes(buffer):
-        """ Returns new TPM2B_MLDSA_PUBLIC_KEY object constructed from its
+        """ Returns new TPM2B_PUBLIC_KEY_MLDSA object constructed from its
         marshaled representation in the given byte buffer
         """
-        return TpmBuffer(buffer).createObj(TPM2B_MLDSA_PUBLIC_KEY)
-# TPM2B_MLDSA_PUBLIC_KEY
+        return TpmBuffer(buffer).createObj(TPM2B_PUBLIC_KEY_MLDSA)
+# TPM2B_PUBLIC_KEY_MLDSA
 
-class TPM2B_MLKEM_PUBLIC_KEY (TpmStructure, TPMU_PUBLIC_ID):
+class TPM2B_PUBLIC_KEY_MLKEM (TpmStructure, TPMU_PUBLIC_ID):
     def __init__(self, buffer = None):
         """ Sized buffer holding an ML-KEM public key
         (TPM 2.0 Library Spec v1.85 Part 2 Table 205)
@@ -18632,18 +18632,18 @@ class TPM2B_MLKEM_PUBLIC_KEY (TpmStructure, TPMU_PUBLIC_ID):
 
     @staticmethod
     def fromTpm(buf):
-        """ Returns new TPM2B_MLKEM_PUBLIC_KEY object constructed from its
+        """ Returns new TPM2B_PUBLIC_KEY_MLKEM object constructed from its
         marshaled representation in the given TpmBuffer buffer
         """
-        return buf.createObj(TPM2B_MLKEM_PUBLIC_KEY)
+        return buf.createObj(TPM2B_PUBLIC_KEY_MLKEM)
 
     @staticmethod
     def fromBytes(buffer):
-        """ Returns new TPM2B_MLKEM_PUBLIC_KEY object constructed from its
+        """ Returns new TPM2B_PUBLIC_KEY_MLKEM object constructed from its
         marshaled representation in the given byte buffer
         """
-        return TpmBuffer(buffer).createObj(TPM2B_MLKEM_PUBLIC_KEY)
-# TPM2B_MLKEM_PUBLIC_KEY
+        return TpmBuffer(buffer).createObj(TPM2B_PUBLIC_KEY_MLKEM)
+# TPM2B_PUBLIC_KEY_MLKEM
 
 class TPMS_SIGNATURE_MLDSA (TpmStructure, TPMU_SIGNATURE):
     def __init__(self, sig = None):
@@ -18801,7 +18801,7 @@ class TPM2B_SHARED_SECRET (TpmStructure):
 class TPM2_SignSequenceStart_REQUEST (ReqStructure):
     def __init__(self, keyHandle = TPM_HANDLE(), auth = None, context = None):
         """ Start an ML-DSA signing sequence.
-        (TPM 2.0 Library Spec v1.85 Part 3 Table 89)
+        (TPM 2.0 Library Spec v1.85 Part 3)
 
         Attributes:
             keyHandle (TPM_HANDLE): Handle of the ML-DSA signing key
@@ -18850,7 +18850,7 @@ class TPM2_SignSequenceStart_REQUEST (ReqStructure):
 class SignSequenceStartResponse (RespStructure):
     def __init__(self, sequenceHandle = TPM_HANDLE()):
         """ Response from TPM2_SignSequenceStart
-        (TPM 2.0 Library Spec v1.85 Part 3 Table 89)
+        (TPM 2.0 Library Spec v1.85 Part 3)
 
         Attributes:
             sequenceHandle (TPM_HANDLE): Handle to the signing sequence object
@@ -18881,7 +18881,7 @@ class SignSequenceStartResponse (RespStructure):
 class TPM2_SignSequenceComplete_REQUEST (ReqStructure):
     def __init__(self, sequenceHandle = TPM_HANDLE(), keyHandle = TPM_HANDLE(), buffer = None):
         """ Complete an ML-DSA signing sequence and return the signature.
-        (TPM 2.0 Library Spec v1.85 Part 3 Table 91)
+        (TPM 2.0 Library Spec v1.85 Part 3)
 
         Attributes:
             sequenceHandle (TPM_HANDLE): Handle to the signing sequence
@@ -18930,7 +18930,7 @@ class TPM2_SignSequenceComplete_REQUEST (ReqStructure):
 class SignSequenceCompleteResponse (RespStructure):
     def __init__(self, signature = None):
         """ Response from TPM2_SignSequenceComplete
-        (TPM 2.0 Library Spec v1.85 Part 3 Table 91)
+        (TPM 2.0 Library Spec v1.85 Part 3)
 
         Attributes:
             signature (TPMU_SIGNATURE): The ML-DSA signature.
@@ -18977,7 +18977,7 @@ class SignSequenceCompleteResponse (RespStructure):
 class TPM2_VerifySequenceStart_REQUEST (ReqStructure):
     def __init__(self, keyHandle = TPM_HANDLE(), auth = None, hint = None, context = None):
         """ Start an ML-DSA verification sequence.
-        (TPM 2.0 Library Spec v1.85 Part 3 Table 87)
+        (TPM 2.0 Library Spec v1.85 Part 3)
 
         Attributes:
             keyHandle (TPM_HANDLE): Handle of the ML-DSA verification key
@@ -19032,7 +19032,7 @@ class TPM2_VerifySequenceStart_REQUEST (ReqStructure):
 class VerifySequenceStartResponse (RespStructure):
     def __init__(self, sequenceHandle = TPM_HANDLE()):
         """ Response from TPM2_VerifySequenceStart
-        (TPM 2.0 Library Spec v1.85 Part 3 Table 87)
+        (TPM 2.0 Library Spec v1.85 Part 3)
 
         Attributes:
             sequenceHandle (TPM_HANDLE): Handle to the verification sequence object
@@ -19063,7 +19063,7 @@ class VerifySequenceStartResponse (RespStructure):
 class TPM2_VerifySequenceComplete_REQUEST (ReqStructure):
     def __init__(self, sequenceHandle = TPM_HANDLE(), keyHandle = TPM_HANDLE(), signature = None):
         """ Complete an ML-DSA verification sequence.
-        (TPM 2.0 Library Spec v1.85 Part 3 Table 118)
+        (TPM 2.0 Library Spec v1.85 Part 3)
 
         The accumulated message is maintained inside the sequence object on the
         TPM (fed via TPM2_SequenceUpdate); there is no per-call buffer field.
@@ -19127,7 +19127,7 @@ class TPM2_VerifySequenceComplete_REQUEST (ReqStructure):
 class VerifySequenceCompleteResponse (RespStructure):
     def __init__(self, validation = None):
         """ Response from TPM2_VerifySequenceComplete
-        (TPM 2.0 Library Spec v1.85 Part 3 Table 118)
+        (TPM 2.0 Library Spec v1.85 Part 3)
 
         Attributes:
             validation (TPMT_TK_VERIFIED): Ticket indicating that the signature
