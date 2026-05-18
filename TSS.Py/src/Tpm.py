@@ -2598,4 +2598,181 @@ class Tpm(TpmBase):
         return res.outputData if res else None
     # Vendor_TCG_Test()
 
+    def SignSequenceStart(self, keyHandle, auth, context=None):
+        """ Start an ML-DSA signing sequence.
+        (TPM 2.0 Library Spec v1.85 Part 3)
+
+        Args:
+            keyHandle (TPM_HANDLE): Handle of the ML-DSA signing key
+                Auth Index: 1
+                Auth Role: USER
+            auth (bytes): Authorization value for the returned sequence handle
+            context (bytes): Optional opaque context blob (typically None/empty
+                for pure ML-DSA); passed as TPM2B_SIGNATURE_CTX
+
+        Returns:
+            sequenceHandle - Handle to the signing sequence object
+        """
+        req = TPM2_SignSequenceStart_REQUEST(keyHandle, auth, context)
+        respBuf = self.dispatchCommand(TPM_CC.SignSequenceStart, req)
+        res = self.processResponse(respBuf, SignSequenceStartResponse)
+        return res.sequenceHandle if res else None
+    # SignSequenceStart()
+
+    def SignSequenceComplete(self, sequenceHandle, keyHandle, buffer):
+        """ Complete an ML-DSA signing sequence and return the signature.
+        (TPM 2.0 Library Spec v1.85 Part 3)
+
+        Args:
+            sequenceHandle (TPM_HANDLE): Handle to the signing sequence
+                Auth Index: 1
+                Auth Role: USER
+            keyHandle (TPM_HANDLE): Handle of the ML-DSA signing key
+                Auth Index: 2
+                Auth Role: USER
+            buffer (bytes): Last chunk of message data to add (may be empty)
+
+        Returns:
+            signature - The ML-DSA signature (TPMU_SIGNATURE)
+        """
+        req = TPM2_SignSequenceComplete_REQUEST(sequenceHandle, keyHandle, buffer)
+        respBuf = self.dispatchCommand(TPM_CC.SignSequenceComplete, req)
+        res = self.processResponse(respBuf, SignSequenceCompleteResponse)
+        return res.signature if res else None
+    # SignSequenceComplete()
+
+    def VerifySequenceStart(self, keyHandle, auth, hint=None, context=None):
+        """ Start an ML-DSA verification sequence.
+        (TPM 2.0 Library Spec v1.85 Part 3)
+
+        Args:
+            keyHandle (TPM_HANDLE): Handle of the ML-DSA verification key
+                Auth Index: None (public key operation, no authorization required)
+            auth (bytes): Authorization value for the returned sequence handle
+            hint (bytes): Signature hint — for ML-DSA the size must be 0 (pass
+                None or empty bytes); for EdDSA carries the encoded R value.
+                Passed as TPM2B_SIGNATURE_HINT.
+            context (bytes): Optional opaque context blob (typically None/empty
+                for pure ML-DSA); passed as TPM2B_SIGNATURE_CTX.
+
+        Returns:
+            sequenceHandle - Handle to the verification sequence object
+        """
+        req = TPM2_VerifySequenceStart_REQUEST(keyHandle, auth, hint, context)
+        respBuf = self.dispatchCommand(TPM_CC.VerifySequenceStart, req)
+        res = self.processResponse(respBuf, VerifySequenceStartResponse)
+        return res.sequenceHandle if res else None
+    # VerifySequenceStart()
+
+    def VerifySequenceComplete(self, sequenceHandle, keyHandle, signature):
+        """ Complete an ML-DSA verification sequence.
+        (TPM 2.0 Library Spec v1.85 Part 3)
+
+        The accumulated message is maintained inside the sequence object on the
+        TPM (fed via SequenceUpdate); there is no per-call buffer field.
+
+        Args:
+            sequenceHandle (TPM_HANDLE): Handle to the verification sequence
+                Auth Index: None
+            keyHandle (TPM_HANDLE): Handle of the ML-DSA verification key
+                Auth Index: None
+            signature (TPMU_SIGNATURE): The ML-DSA signature to verify
+                (e.g. TPMS_SIGNATURE_MLDSA or TPMS_SIGNATURE_HASH_MLDSA)
+
+        Returns:
+            validation - Ticket indicating signature verification succeeded (TPMT_TK_VERIFIED)
+        """
+        req = TPM2_VerifySequenceComplete_REQUEST(sequenceHandle, keyHandle, signature)
+        respBuf = self.dispatchCommand(TPM_CC.VerifySequenceComplete, req)
+        res = self.processResponse(respBuf, VerifySequenceCompleteResponse)
+        return res.validation if res else None
+    # VerifySequenceComplete()
+
+    def Encapsulate(self, keyHandle):
+        """ Perform ML-KEM encapsulation: generate ciphertext and shared secret.
+        (TPM 2.0 Library Spec v1.85 Part 3)
+
+        Args:
+            keyHandle (TPM_HANDLE): Handle of the ML-KEM public key
+                Auth Index: None (public key operation, no authorization required)
+
+        Returns:
+            Full EncapsulateResponse with:
+                sharedSecret (TPM2B_SHARED_SECRET) - The shared secret
+                ciphertext (TPM2B_KEM_CIPHERTEXT) - Ciphertext to send to the decapsulator
+        """
+        req = TPM2_Encapsulate_REQUEST(keyHandle)
+        respBuf = self.dispatchCommand(TPM_CC.Encapsulate, req)
+        return self.processResponse(respBuf, EncapsulateResponse)
+    # Encapsulate()
+
+    def Decapsulate(self, keyHandle, ciphertext):
+        """ Perform ML-KEM decapsulation: recover the shared secret from ciphertext.
+        (TPM 2.0 Library Spec v1.85 Part 3)
+
+        Args:
+            keyHandle (TPM_HANDLE): Handle of the ML-KEM private key
+                Auth Index: 1
+                Auth Role: USER
+            ciphertext (TPM2B_KEM_CIPHERTEXT): The KEM ciphertext from the encapsulator
+
+        Returns:
+            sharedSecret (TPM2B_SHARED_SECRET) - The recovered shared secret
+        """
+        req = TPM2_Decapsulate_REQUEST(keyHandle, ciphertext)
+        respBuf = self.dispatchCommand(TPM_CC.Decapsulate, req)
+        res = self.processResponse(respBuf, DecapsulateResponse)
+        return res.sharedSecret if res else None
+    # Decapsulate()
+
+    def SignDigest(self, keyHandle, digest, context=None, validation=None):
+        """ Sign an externally-computed digest using any supported digest-sign
+        scheme (e.g. ML-DSA with allowExternalMu=YES, HashML-DSA).
+        (TPM 2.0 Library Spec v1.85 Part 3)
+
+        Args:
+            keyHandle (TPM_HANDLE): Handle of the signing key
+                Auth Index: 1
+                Auth Role: USER
+            digest (bytes): Externally-computed digest (mu value) to be signed
+            context (bytes): Optional opaque context blob passed as
+                TPM2B_SIGNATURE_CTX (pass None or empty for most schemes)
+            validation (TPMT_TK_HASHCHECK): Ticket proving the digest was
+                produced by the TPM. Pass None for a NULL ticket (unrestricted
+                signing keys do not require a valid ticket).
+
+        Returns:
+            signature - The generated signature (TPMU_SIGNATURE)
+        """
+        req = TPM2_SignDigest_REQUEST(keyHandle, context, digest, validation)
+        respBuf = self.dispatchCommand(TPM_CC.SignDigest, req)
+        res = self.processResponse(respBuf, SignDigestResponse)
+        return res.signature if res else None
+    # SignDigest()
+
+    def VerifyDigestSignature(self, keyHandle, digest, signature, context=None):
+        """ Verify a signature over an externally-computed digest using any
+        supported digest-sign scheme (e.g. ML-DSA with allowExternalMu=YES,
+        HashML-DSA).
+        (TPM 2.0 Library Spec v1.85 Part 3)
+
+        Args:
+            keyHandle (TPM_HANDLE): Handle of the public key for verification
+                Auth Index: None
+            digest (bytes): Externally-computed digest (mu value) that was signed
+            signature (TPMT_SIGNATURE): Signature to verify
+                (e.g. TPMS_SIGNATURE_MLDSA or TPMS_SIGNATURE_HASH_MLDSA)
+            context (bytes): Optional opaque context blob passed as
+                TPM2B_SIGNATURE_CTX (pass None or empty for most schemes)
+
+        Returns:
+            validation - Ticket indicating signature verification succeeded
+                         (TPMT_TK_VERIFIED with tag TPM_ST.DIGEST_VERIFIED)
+        """
+        req = TPM2_VerifyDigestSignature_REQUEST(keyHandle, context, digest, signature)
+        respBuf = self.dispatchCommand(TPM_CC.VerifyDigestSignature, req)
+        res = self.processResponse(respBuf, VerifyDigestSignatureResponse)
+        return res.validation if res else None
+    # VerifyDigestSignature()
+
 # class Tpm

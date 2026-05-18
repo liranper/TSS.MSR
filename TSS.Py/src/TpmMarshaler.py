@@ -60,7 +60,7 @@ class SizedStructInfo:
 
 
 class TpmBuffer:
-    def __init__(self, lengthOrSrcBuf = 4096):
+    def __init__(self, lengthOrSrcBuf = 8*1024):
         if isinstance(lengthOrSrcBuf, TpmBuffer):
             self.__buf = bytearray(lengthOrSrcBuf.buf)
         elif isinstance(lengthOrSrcBuf, bytearray):
