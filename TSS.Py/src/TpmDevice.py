@@ -69,8 +69,8 @@ class TpmTbsDevice(TpmDevice):
 
     # override
     def dispatchCommand(self, commandBuffer):
-        responseBuffer = bytes(4096)
-        respLen = self.__c_int(4096)
+        responseBuffer = bytes(8192)
+        respLen = self.__c_int(8192)
         res = self.__tbs.Tbsip_Submit_Command(self.__tbsCtx, 0, 0, bytes(commandBuffer), len(commandBuffer), responseBuffer, self.__byref(respLen))
         if (res != 0):
             raise(Exception('Tbsip_Submit_Command() failed: error ' + hex(res)))
