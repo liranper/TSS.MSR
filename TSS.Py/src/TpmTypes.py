@@ -19332,8 +19332,8 @@ class TPM2_SignDigest_REQUEST (ReqStructure):
                 Auth Index: 1
                 Auth Role: USER
             digest (bytes): Externally-computed digest (mu value) to be signed
-            context (TPM2B_SIGNATURE_CTX): Optional opaque context blob
-                (pass None or empty for most schemes)
+            context (bytes): Optional opaque context blob passed as
+                TPM2B_SIGNATURE_CTX (pass None or empty for most schemes)
         """
         self.keyHandle = keyHandle
         self.digest = digest
@@ -19342,13 +19342,12 @@ class TPM2_SignDigest_REQUEST (ReqStructure):
     def toTpm(self, buf):
         """ TpmMarshaller method """
         buf.writeSizedByteBuf(self.digest)
-        ctx = self.context if self.context is not None else TPM2B_SIGNATURE_CTX()
-        ctx.toTpm(buf)
+        buf.writeSizedByteBuf(self.context)
 
     def initFromTpm(self, buf):
         """ TpmMarshaller method """
         self.digest = buf.readSizedByteBuf()
-        self.context = TPM2B_SIGNATURE_CTX.fromTpm(buf)
+        self.context = buf.readSizedByteBuf()
 
     @staticmethod
     def fromTpm(buf):
@@ -19437,8 +19436,8 @@ class TPM2_VerifyDigestSignature_REQUEST (ReqStructure):
                 TPMS_SIGNATURE_ECDSA, TPMS_SIGNATURE_ECDAA, TPMS_SIGNATURE_SM2,
                 TPMS_SIGNATURE_ECSCHNORR, TPMT_HA, TPMS_SCHEME_HASH,
                 TPMS_NULL_SIGNATURE.
-            context (TPM2B_SIGNATURE_CTX): Optional opaque context blob
-                (pass None or empty for most schemes)
+            context (bytes): Optional opaque context blob passed as
+                TPM2B_SIGNATURE_CTX (pass None or empty for most schemes)
         """
         self.keyHandle = keyHandle
         self.digest = digest
@@ -19458,8 +19457,7 @@ class TPM2_VerifyDigestSignature_REQUEST (ReqStructure):
         else:
             buf.writeShort(self.signature.GetUnionSelector())
             self.signature.toTpm(buf)
-        ctx = self.context if self.context is not None else TPM2B_SIGNATURE_CTX()
-        ctx.toTpm(buf)
+        buf.writeSizedByteBuf(self.context)
 
     def initFromTpm(self, buf):
         """ TpmMarshaller method """
@@ -19467,7 +19465,7 @@ class TPM2_VerifyDigestSignature_REQUEST (ReqStructure):
         signatureSigAlg = buf.readShort()
         self.signature = UnionFactory.create('TPMU_SIGNATURE', signatureSigAlg)
         self.signature.initFromTpm(buf)
-        self.context = TPM2B_SIGNATURE_CTX.fromTpm(buf)
+        self.context = buf.readSizedByteBuf()
 
     @staticmethod
     def fromTpm(buf):

@@ -2735,8 +2735,8 @@ class Tpm(TpmBase):
                 Auth Index: 1
                 Auth Role: USER
             digest (bytes): Externally-computed digest (mu value) to be signed
-            context (bytes): Optional opaque context blob (pass None or empty
-                for most schemes); marshaled as TPM2B_SIGNATURE_CTX
+            context (bytes): Optional opaque context blob passed as
+                TPM2B_SIGNATURE_CTX (pass None or empty for most schemes)
 
         Returns:
             signature - The generated signature (TPMU_SIGNATURE)
@@ -2759,8 +2759,8 @@ class Tpm(TpmBase):
             digest (bytes): Externally-computed digest (mu value) that was signed
             signature (TPMU_SIGNATURE): Signature to verify
                 (e.g. TPMS_SIGNATURE_MLDSA or TPMS_SIGNATURE_HASH_MLDSA)
-            context (bytes): Optional opaque context blob (pass None or empty
-                for most schemes); marshaled as TPM2B_SIGNATURE_CTX
+            context (bytes): Optional opaque context blob passed as
+                TPM2B_SIGNATURE_CTX (pass None or empty for most schemes)
 
         Returns:
             validation - Ticket indicating signature verification succeeded
