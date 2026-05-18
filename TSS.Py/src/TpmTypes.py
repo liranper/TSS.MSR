@@ -659,11 +659,13 @@ class TPM_CC(TpmEnum): # UINT32
     """ Complete an ML-DSA signing sequence (TPM 2.0 Library Spec v1.85 Part 3) """
 
     VerifyDigestSignature = 0x000001A5
-    """ Verify an ML-DSA signature over an externally-computed digest
+    """ Verify a signature over an externally-computed digest using any supported
+    digest-sign scheme (e.g. ML-DSA with allowExternalMu, HashML-DSA, etc.)
     (TPM 2.0 Library Spec v1.85 Part 3) """
 
     SignDigest = 0x000001A6
-    """ Sign an externally-computed digest with an ML-DSA key
+    """ Sign an externally-computed digest using any supported digest-sign scheme
+    (e.g. ML-DSA with allowExternalMu, HashML-DSA, etc.)
     (TPM 2.0 Library Spec v1.85 Part 3) """
 
     Encapsulate = 0x000001A7
@@ -19318,3 +19320,209 @@ class DecapsulateResponse (RespStructure):
 
     def sessEncInfo(self): return SessEncInfo(2, 1)
 # DecapsulateResponse
+
+class TPM2_SignDigest_REQUEST (ReqStructure):
+    def __init__(self, keyHandle = TPM_HANDLE(), digest = None, context = None):
+        """ Sign an externally-computed digest using any supported digest-sign
+        scheme (e.g. ML-DSA with allowExternalMu=YES, HashML-DSA).
+        (TPM 2.0 Library Spec v1.85 Part 3)
+
+        Attributes:
+            keyHandle (TPM_HANDLE): Handle of the signing key
+                Auth Index: 1
+                Auth Role: USER
+            digest (bytes): Externally-computed digest (mu value) to be signed
+            context (TPM2B_SIGNATURE_CTX): Optional opaque context blob
+                (pass None or empty for most schemes)
+        """
+        self.keyHandle = keyHandle
+        self.digest = digest
+        self.context = context
+
+    def toTpm(self, buf):
+        """ TpmMarshaller method """
+        buf.writeSizedByteBuf(self.digest)
+        ctx = self.context if self.context is not None else TPM2B_SIGNATURE_CTX()
+        ctx.toTpm(buf)
+
+    def initFromTpm(self, buf):
+        """ TpmMarshaller method """
+        self.digest = buf.readSizedByteBuf()
+        self.context = TPM2B_SIGNATURE_CTX.fromTpm(buf)
+
+    @staticmethod
+    def fromTpm(buf):
+        """ Returns new TPM2_SignDigest_REQUEST object constructed from its
+        marshaled representation in the given TpmBuffer buffer
+        """
+        return buf.createObj(TPM2_SignDigest_REQUEST)
+
+    @staticmethod
+    def fromBytes(buffer):
+        """ Returns new TPM2_SignDigest_REQUEST object constructed from its
+        marshaled representation in the given byte buffer
+        """
+        return TpmBuffer(buffer).createObj(TPM2_SignDigest_REQUEST)
+
+    def numHandles(self): return 1
+
+    def numAuthHandles(self): return 1
+
+    def getHandles(self): return [self.keyHandle]
+
+    def sessEncInfo(self): return SessEncInfo(2, 1)
+# TPM2_SignDigest_REQUEST
+
+class SignDigestResponse (RespStructure):
+    def __init__(self, signature = None):
+        """ Response from TPM2_SignDigest.
+        (TPM 2.0 Library Spec v1.85 Part 3)
+
+        Attributes:
+            signature (TPMU_SIGNATURE): The generated signature
+                One of: TPMS_SIGNATURE_MLDSA, TPMS_SIGNATURE_HASH_MLDSA,
+                TPMS_SIGNATURE_RSASSA, TPMS_SIGNATURE_RSAPSS,
+                TPMS_SIGNATURE_ECDSA, TPMS_SIGNATURE_ECDAA, TPMS_SIGNATURE_SM2,
+                TPMS_SIGNATURE_ECSCHNORR, TPMT_HA, TPMS_SCHEME_HASH,
+                TPMS_NULL_SIGNATURE.
+        """
+        self.signature = signature
+
+    @property
+    def signatureSigAlg(self): # TPM_ALG_ID
+        """ Selector of the algorithm used to construct the signature """
+        return self.signature.GetUnionSelector() if self.signature else TPM_ALG_ID.NULL
+
+    def toTpm(self, buf):
+        """ TpmMarshaller method """
+        if self.signature is None: return
+        buf.writeShort(self.signature.GetUnionSelector())
+        self.signature.toTpm(buf)
+
+    def initFromTpm(self, buf):
+        """ TpmMarshaller method """
+        signatureSigAlg = buf.readShort()
+        self.signature = UnionFactory.create('TPMU_SIGNATURE', signatureSigAlg)
+        self.signature.initFromTpm(buf)
+
+    @staticmethod
+    def fromTpm(buf):
+        """ Returns new SignDigestResponse object constructed from its
+        marshaled representation in the given TpmBuffer buffer
+        """
+        return buf.createObj(SignDigestResponse)
+
+    @staticmethod
+    def fromBytes(buffer):
+        """ Returns new SignDigestResponse object constructed from its
+        marshaled representation in the given byte buffer
+        """
+        return TpmBuffer(buffer).createObj(SignDigestResponse)
+# SignDigestResponse
+
+class TPM2_VerifyDigestSignature_REQUEST (ReqStructure):
+    def __init__(self, keyHandle = TPM_HANDLE(), digest = None, signature = None, context = None):
+        """ Verify a signature over an externally-computed digest using any
+        supported digest-sign scheme (e.g. ML-DSA with allowExternalMu=YES,
+        HashML-DSA).
+        (TPM 2.0 Library Spec v1.85 Part 3)
+
+        Attributes:
+            keyHandle (TPM_HANDLE): Handle of the public key for verification
+                Auth Index: None
+            digest (bytes): Externally-computed digest (mu value) that was signed
+            signature (TPMU_SIGNATURE): Signature to verify
+                One of: TPMS_SIGNATURE_MLDSA, TPMS_SIGNATURE_HASH_MLDSA,
+                TPMS_SIGNATURE_RSASSA, TPMS_SIGNATURE_RSAPSS,
+                TPMS_SIGNATURE_ECDSA, TPMS_SIGNATURE_ECDAA, TPMS_SIGNATURE_SM2,
+                TPMS_SIGNATURE_ECSCHNORR, TPMT_HA, TPMS_SCHEME_HASH,
+                TPMS_NULL_SIGNATURE.
+            context (TPM2B_SIGNATURE_CTX): Optional opaque context blob
+                (pass None or empty for most schemes)
+        """
+        self.keyHandle = keyHandle
+        self.digest = digest
+        self.signature = signature
+        self.context = context
+
+    @property
+    def signatureSigAlg(self): # TPM_ALG_ID
+        """ Selector of the algorithm used to construct the signature """
+        return self.signature.GetUnionSelector() if self.signature else TPM_ALG_ID.NULL
+
+    def toTpm(self, buf):
+        """ TpmMarshaller method """
+        buf.writeSizedByteBuf(self.digest)
+        if self.signature is None:
+            buf.writeShort(TPM_ALG_ID.NULL)
+        else:
+            buf.writeShort(self.signature.GetUnionSelector())
+            self.signature.toTpm(buf)
+        ctx = self.context if self.context is not None else TPM2B_SIGNATURE_CTX()
+        ctx.toTpm(buf)
+
+    def initFromTpm(self, buf):
+        """ TpmMarshaller method """
+        self.digest = buf.readSizedByteBuf()
+        signatureSigAlg = buf.readShort()
+        self.signature = UnionFactory.create('TPMU_SIGNATURE', signatureSigAlg)
+        self.signature.initFromTpm(buf)
+        self.context = TPM2B_SIGNATURE_CTX.fromTpm(buf)
+
+    @staticmethod
+    def fromTpm(buf):
+        """ Returns new TPM2_VerifyDigestSignature_REQUEST object constructed from
+        its marshaled representation in the given TpmBuffer buffer
+        """
+        return buf.createObj(TPM2_VerifyDigestSignature_REQUEST)
+
+    @staticmethod
+    def fromBytes(buffer):
+        """ Returns new TPM2_VerifyDigestSignature_REQUEST object constructed from
+        its marshaled representation in the given byte buffer
+        """
+        return TpmBuffer(buffer).createObj(TPM2_VerifyDigestSignature_REQUEST)
+
+    def numHandles(self): return 1
+
+    def numAuthHandles(self): return 0
+
+    def getHandles(self): return [self.keyHandle]
+
+    def sessEncInfo(self): return SessEncInfo(2, 1)
+# TPM2_VerifyDigestSignature_REQUEST
+
+class VerifyDigestSignatureResponse (RespStructure):
+    def __init__(self, validation = None):
+        """ Response from TPM2_VerifyDigestSignature.
+        (TPM 2.0 Library Spec v1.85 Part 3)
+
+        Attributes:
+            validation (TPMT_TK_VERIFIED): Ticket indicating that the signature
+                verification succeeded
+        """
+        self.validation = validation
+
+    def toTpm(self, buf):
+        """ TpmMarshaller method """
+        if self.validation is not None:
+            self.validation.toTpm(buf)
+
+    def initFromTpm(self, buf):
+        """ TpmMarshaller method """
+        self.validation = TPMT_TK_VERIFIED.fromTpm(buf)
+
+    @staticmethod
+    def fromTpm(buf):
+        """ Returns new VerifyDigestSignatureResponse object constructed from its
+        marshaled representation in the given TpmBuffer buffer
+        """
+        return buf.createObj(VerifyDigestSignatureResponse)
+
+    @staticmethod
+    def fromBytes(buffer):
+        """ Returns new VerifyDigestSignatureResponse object constructed from its
+        marshaled representation in the given byte buffer
+        """
+        return TpmBuffer(buffer).createObj(VerifyDigestSignatureResponse)
+# VerifyDigestSignatureResponse
