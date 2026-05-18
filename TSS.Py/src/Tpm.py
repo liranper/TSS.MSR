@@ -2725,7 +2725,7 @@ class Tpm(TpmBase):
         return res.sharedSecret if res else None
     # Decapsulate()
 
-    def SignDigest(self, keyHandle, digest, context=None):
+    def SignDigest(self, keyHandle, digest, context=None, validation=None):
         """ Sign an externally-computed digest using any supported digest-sign
         scheme (e.g. ML-DSA with allowExternalMu=YES, HashML-DSA).
         (TPM 2.0 Library Spec v1.85 Part 3)
@@ -2737,11 +2737,14 @@ class Tpm(TpmBase):
             digest (bytes): Externally-computed digest (mu value) to be signed
             context (bytes): Optional opaque context blob passed as
                 TPM2B_SIGNATURE_CTX (pass None or empty for most schemes)
+            validation (TPMT_TK_HASHCHECK): Ticket proving the digest was
+                produced by the TPM. Pass None for a NULL ticket (unrestricted
+                signing keys do not require a valid ticket).
 
         Returns:
             signature - The generated signature (TPMU_SIGNATURE)
         """
-        req = TPM2_SignDigest_REQUEST(keyHandle, digest, context)
+        req = TPM2_SignDigest_REQUEST(keyHandle, context, digest, validation)
         respBuf = self.dispatchCommand(TPM_CC.SignDigest, req)
         res = self.processResponse(respBuf, SignDigestResponse)
         return res.signature if res else None
@@ -2757,16 +2760,16 @@ class Tpm(TpmBase):
             keyHandle (TPM_HANDLE): Handle of the public key for verification
                 Auth Index: None
             digest (bytes): Externally-computed digest (mu value) that was signed
-            signature (TPMU_SIGNATURE): Signature to verify
+            signature (TPMT_SIGNATURE): Signature to verify
                 (e.g. TPMS_SIGNATURE_MLDSA or TPMS_SIGNATURE_HASH_MLDSA)
             context (bytes): Optional opaque context blob passed as
                 TPM2B_SIGNATURE_CTX (pass None or empty for most schemes)
 
         Returns:
             validation - Ticket indicating signature verification succeeded
-                         (TPMT_TK_VERIFIED)
+                         (TPMT_TK_VERIFIED with tag TPM_ST.DIGEST_VERIFIED)
         """
-        req = TPM2_VerifyDigestSignature_REQUEST(keyHandle, digest, signature, context)
+        req = TPM2_VerifyDigestSignature_REQUEST(keyHandle, context, digest, signature)
         respBuf = self.dispatchCommand(TPM_CC.VerifyDigestSignature, req)
         res = self.processResponse(respBuf, VerifyDigestSignatureResponse)
         return res.validation if res else None

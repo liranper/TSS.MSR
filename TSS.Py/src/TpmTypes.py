@@ -1445,6 +1445,15 @@ class TPM_ST(TpmEnum): # UINT16
     AUTH_SIGNED = 0x8025
     """ Tag for a ticket type """
 
+    MESSAGE_VERIFIED = 0x8026
+    """ v1.85: Tag for a verification ticket produced by TPM2_VerifySequenceComplete.
+    The wire format is identical to TPM_ST_VERIFIED (no metaAlg field). """
+
+    DIGEST_VERIFIED = 0x8027
+    """ v1.85: Tag for a verification ticket produced by TPM2_VerifyDigestSignature.
+    The wire format includes an extra metaAlg (TPM_ALG_ID) field between hierarchy
+    and digest, carrying the hash/XOF algorithm used. """
+
     FU_MANIFEST = 0x8029
     """ Tag for a structure describing a Field Upgrade Policy """
 # enum TPM_ST
@@ -3006,7 +3015,35 @@ class TPMA_MODES(TpmEnum): # UINT32
     """
 # bitfield TPMA_MODES
 
-class TPMA_X509_KEY_USAGE(TpmEnum): # UINT32
+class TPMA_ML_PARAMETER_SET(TpmEnum): # UINT32
+    """ v1.85: Bitfield returned from TPM2_GetCapability(TPM_CAP_TPM_PROPERTIES,
+    TPM_PT_ML_PARAMETER_SETS) indicating which ML-KEM/ML-DSA parameter sets
+    the TPM supports (Part 2 Sec.8.13 Table 46).
+    """
+
+    mlKem_512  = 0x00000001
+    """ SET (1): TPM supports ML-KEM-512 """
+
+    mlKem_768  = 0x00000002
+    """ SET (1): TPM supports ML-KEM-768 """
+
+    mlKem_1024 = 0x00000004
+    """ SET (1): TPM supports ML-KEM-1024 """
+
+    mlDsa_44   = 0x00000008
+    """ SET (1): TPM supports ML-DSA-44 """
+
+    mlDsa_65   = 0x00000010
+    """ SET (1): TPM supports ML-DSA-65 """
+
+    mlDsa_87   = 0x00000020
+    """ SET (1): TPM supports ML-DSA-87 """
+
+    extMu      = 0x00000040
+    """ SET (1): TPM supports external-mu signing (SignDigest/VerifyDigestSignature) """
+# bitfield TPMA_ML_PARAMETER_SET
+
+
     """ These attributes are as specified in clause 4.2.1.3. of RFC 5280
     Internet X.509 Public Key Infrastructure Certificate and Certificate
     Revocation List (CRL) Profile. For TPM2_CertifyX509, when a caller
@@ -4220,6 +4257,9 @@ class TPMT_TK_VERIFIED (TpmStructure):
         """
         self.hierarchy = hierarchy
         self.digest = digest
+        self.metaAlg = TPM_ALG_ID.NULL
+        """ v1.85: algorithm selector carried by TPM_ST_DIGEST_VERIFIED tickets;
+        absent on the wire for TPM_ST_VERIFIED / TPM_ST_MESSAGE_VERIFIED. """
 
     def toTpm(self, buf):
         """ TpmMarshaller method """
@@ -4229,8 +4269,10 @@ class TPMT_TK_VERIFIED (TpmStructure):
 
     def initFromTpm(self, buf):
         """ TpmMarshaller method """
-        buf.readShort()
+        tag = buf.readShort()
         self.hierarchy = TPM_HANDLE.fromTpm(buf)
+        if tag == TPM_ST.DIGEST_VERIFIED:
+            self.metaAlg = buf.readShort()
         self.digest = buf.readSizedByteBuf()
 
     @staticmethod
@@ -19322,7 +19364,7 @@ class DecapsulateResponse (RespStructure):
 # DecapsulateResponse
 
 class TPM2_SignDigest_REQUEST (ReqStructure):
-    def __init__(self, keyHandle = TPM_HANDLE(), digest = None, context = None):
+    def __init__(self, keyHandle = TPM_HANDLE(), context = None, digest = None, validation = None):
         """ Sign an externally-computed digest using any supported digest-sign
         scheme (e.g. ML-DSA with allowExternalMu=YES, HashML-DSA).
         (TPM 2.0 Library Spec v1.85 Part 3)
@@ -19331,23 +19373,31 @@ class TPM2_SignDigest_REQUEST (ReqStructure):
             keyHandle (TPM_HANDLE): Handle of the signing key
                 Auth Index: 1
                 Auth Role: USER
-            digest (bytes): Externally-computed digest (mu value) to be signed
             context (bytes): Optional opaque context blob passed as
                 TPM2B_SIGNATURE_CTX (pass None or empty for most schemes)
+            digest (bytes): Externally-computed digest (mu value) to be signed
+            validation (TPMT_TK_HASHCHECK): Ticket proving the digest was
+                produced by the TPM; use a NULL ticket
+                (TPM_ST_CHECKHASH, NULL hierarchy, empty digest) for
+                unrestricted signing keys.
         """
         self.keyHandle = keyHandle
-        self.digest = digest
         self.context = context
+        self.digest = digest
+        self.validation = validation
 
     def toTpm(self, buf):
         """ TpmMarshaller method """
-        buf.writeSizedByteBuf(self.digest)
         buf.writeSizedByteBuf(self.context)
+        buf.writeSizedByteBuf(self.digest)
+        val = self.validation if self.validation is not None else TPMT_TK_HASHCHECK()
+        val.toTpm(buf)
 
     def initFromTpm(self, buf):
         """ TpmMarshaller method """
-        self.digest = buf.readSizedByteBuf()
         self.context = buf.readSizedByteBuf()
+        self.digest = buf.readSizedByteBuf()
+        self.validation = TPMT_TK_HASHCHECK.fromTpm(buf)
 
     @staticmethod
     def fromTpm(buf):
@@ -19420,7 +19470,7 @@ class SignDigestResponse (RespStructure):
 # SignDigestResponse
 
 class TPM2_VerifyDigestSignature_REQUEST (ReqStructure):
-    def __init__(self, keyHandle = TPM_HANDLE(), digest = None, signature = None, context = None):
+    def __init__(self, keyHandle = TPM_HANDLE(), context = None, digest = None, signature = None):
         """ Verify a signature over an externally-computed digest using any
         supported digest-sign scheme (e.g. ML-DSA with allowExternalMu=YES,
         HashML-DSA).
@@ -19429,20 +19479,21 @@ class TPM2_VerifyDigestSignature_REQUEST (ReqStructure):
         Attributes:
             keyHandle (TPM_HANDLE): Handle of the public key for verification
                 Auth Index: None
+            context (bytes): Optional opaque context blob passed as
+                TPM2B_SIGNATURE_CTX (pass None or empty for most schemes)
             digest (bytes): Externally-computed digest (mu value) that was signed
-            signature (TPMU_SIGNATURE): Signature to verify
+            signature (TPMU_SIGNATURE): Signature to verify (a TPMU_SIGNATURE union
+                member — the wire sigAlg selector is written automatically).
                 One of: TPMS_SIGNATURE_MLDSA, TPMS_SIGNATURE_HASH_MLDSA,
                 TPMS_SIGNATURE_RSASSA, TPMS_SIGNATURE_RSAPSS,
                 TPMS_SIGNATURE_ECDSA, TPMS_SIGNATURE_ECDAA, TPMS_SIGNATURE_SM2,
                 TPMS_SIGNATURE_ECSCHNORR, TPMT_HA, TPMS_SCHEME_HASH,
                 TPMS_NULL_SIGNATURE.
-            context (bytes): Optional opaque context blob passed as
-                TPM2B_SIGNATURE_CTX (pass None or empty for most schemes)
         """
         self.keyHandle = keyHandle
+        self.context = context
         self.digest = digest
         self.signature = signature
-        self.context = context
 
     @property
     def signatureSigAlg(self): # TPM_ALG_ID
@@ -19451,21 +19502,21 @@ class TPM2_VerifyDigestSignature_REQUEST (ReqStructure):
 
     def toTpm(self, buf):
         """ TpmMarshaller method """
+        buf.writeSizedByteBuf(self.context)
         buf.writeSizedByteBuf(self.digest)
         if self.signature is None:
             buf.writeShort(TPM_ALG_ID.NULL)
         else:
             buf.writeShort(self.signature.GetUnionSelector())
             self.signature.toTpm(buf)
-        buf.writeSizedByteBuf(self.context)
 
     def initFromTpm(self, buf):
         """ TpmMarshaller method """
+        self.context = buf.readSizedByteBuf()
         self.digest = buf.readSizedByteBuf()
         signatureSigAlg = buf.readShort()
         self.signature = UnionFactory.create('TPMU_SIGNATURE', signatureSigAlg)
         self.signature.initFromTpm(buf)
-        self.context = buf.readSizedByteBuf()
 
     @staticmethod
     def fromTpm(buf):
